@@ -1,0 +1,39 @@
+terraform {
+  required_version = ">=1"
+
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+    }
+  }
+
+  backend "remote" {
+    organization = "mathspace"
+
+    workspaces {
+      name = "lambdafy-au-staging"
+    }
+  }
+}
+
+locals {
+  env_name = "au-staging"
+  tags = {
+    TerraformWorkspace  = "lambdafy-${local.env_name}"
+    TerraformProjectURL = "https://github.com/mathspace/lambdafy/tree/main/infra/au/staging"
+  }
+}
+
+provider "aws" {
+  allowed_account_ids = ["744621673185"] // Staging
+  region              = "ap-southeast-2"
+  default_tags {
+    tags = local.tags
+  }
+}
+
+data "aws_region" "current" {}
+
+module "lambdafy" {
+  source = "../../modules/lambdafy"
+}
