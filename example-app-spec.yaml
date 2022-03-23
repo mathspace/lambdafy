@@ -1,0 +1,73 @@
+# name is used for AWS resources and to uniquely identify the app
+# Using the same name in the same AWS account and region will result in
+# conflict and overwriting behavior.
+# If your app has different stages (e.g. staging,production), create two
+# spec files with different names (e.g. my-great-app-staging,
+# my-great-app-production). Essentially, treat each stage as a separate
+# app. Same for environments or variations of your app.
+name: my-great-app
+
+# public: false by default.
+#   if set to true:  will allow unauthenticated access to the app. 
+#   if set to false: will redirect to SSO before allowing access.
+public: true
+
+# env defines the environmental variables available to the app. The
+# values follow the format for https://pkg.go.dev/github.com/oxplot/starenv
+# In short:
+# - Values starting with asterisk (*) are treated especially
+# - Special token "@@LAMBDAFY_PORT@@" is replaced with the port that the
+#   application is expected to be listening on. This is the same value as
+#   available in PORT env var as set by the proxy.
+# - All other values are treated as literals.
+env:
+  FOO: "bar"
+  ABC: "123"
+  LISTEN_ADDR: "0.0.0.0:@@LAMBDAFY_PORT@@"
+  API_KEY: "*ssm:arn:aws:ssm:us-west-2:1234567:parameter/lambdafy/my-great-app/key"
+
+# entrypoint is analogous to Dockerfile ENTRYPOINT directive. Specifying
+# it will override the existing ENTRYPOINT in the docker image.
+# NOTE: @@LAMBDAFY_PORT@@ is replaced in entrypoint and command as well.
+#
+# entrypoint:
+#   - /bin/sh
+#   - -c
+
+# command is analogous to Dockerfile CMD directive. Specifying it will
+# override the existing CMD in the docker image.
+#
+# command:
+#  - /my-great-app $FOO --key=$API_KEY
+
+# role is the name of a IAM role, required if your docker image needs
+# access to AWS resources other than those provided by lambdafy by
+# default.
+#
+# role: "arn:..."
+
+# memory specifies the amount of RAM available to lambda function in
+# MBs. Defatuls to 128 and can be up to 10240 in 1 increments.
+#
+# memory: 512
+
+# timeout specifies the maximum amount of time in seconds the lambda
+# function is allowed to run. Defaults to 3 and can be up to 900 in 1
+# second increments.
+#
+# timeout: 30
+
+# allowed_account_regions is a list of account:region that specify which
+# AWS account and region combinations are allowed to be deployed to.
+# This ensures accidental overwrites do not happen. Wildcards can be
+# used for both account and region parts.
+# If unspecified, all regions and all accounts are allowed.
+#
+# allowed_account_regions:
+#   - "*:us-*"  # any account and us regions
+#   - "123456789:ap-southeast-2"  # specific region of specific account
+
+# reserved_concurrency is the number of concurrent executions of the
+# function that is guaranteed.
+#
+# reserved_concurrency: 5
