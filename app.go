@@ -62,15 +62,9 @@ func isAccountRegionAllowed(ctx context.Context, acfg aws.Config) (bool, error) 
 	return spec.IsAccountRegionAllowed(*cid.Account, acfg.Region), nil
 }
 
-type deployResult struct {
-	url      string
-	image    string
-	function string
-}
-
 // deployApp creates/updates necessary resources for running a lambda function
 // with the given image and spec, exposed via a public URL.
-func deployApp(c *cli.Context) (*deployResult, error) {
+func deployApp(c *cli.Context) (map[string]string, error) {
 	if c.NArg() != 1 {
 		return nil, fmt.Errorf("must provide a docker image name as first arg")
 	}
@@ -368,16 +362,18 @@ ENTRYPOINT %s
 		if err != nil {
 			return nil, fmt.Errorf("failed to create function url: %s", err)
 		}
-		return &deployResult{
-			url:      *fOut.FunctionUrl,
-			image:    repoImage,
-			function: fnName,
+		log.Print("deploy complete")
+		return map[string]string{
+			"url":      *fOut.FunctionUrl,
+			"image":    repoImage,
+			"function": fnName,
 		}, nil
 	} else {
-		return &deployResult{
-			url:      *fOut.FunctionUrl,
-			image:    repoImage,
-			function: fnName,
+		log.Print("deploy complete")
+		return map[string]string{
+			"url":      *fOut.FunctionUrl,
+			"image":    repoImage,
+			"function": fnName,
 		}, nil
 	}
 

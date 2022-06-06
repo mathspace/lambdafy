@@ -29,7 +29,7 @@ var (
 		},
 		"text": func(kv map[string]string) {
 			for k, v := range kv {
-				fmt.Printf("%s:%s\n", k, v)
+				fmt.Printf("%s: %s\n", k, v)
 			}
 		},
 	}
@@ -91,7 +91,7 @@ func main() {
 					if err != nil {
 						return err
 					}
-					outp(map[string]string{"url": res.url})
+					outp(res)
 					return nil
 				},
 			},
