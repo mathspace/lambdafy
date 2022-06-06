@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -26,12 +27,13 @@ var (
 	endpoint = "127.0.0.1:" + strconv.Itoa(port)
 	client   = &http.Client{}
 	verbose  = os.Getenv("LAMBDAFY_PROXY_LOGGING") == "verbose"
+	reqCount int32
 )
 
 func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPResponse, err error) {
 
 	if verbose {
-		log.Printf("%#v", req)
+		log.Printf("req #%d : %#v", atomic.AddInt32(&reqCount, 1), req)
 	}
 
 	// Build standard HTTP request from the API Gateway request
