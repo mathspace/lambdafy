@@ -156,7 +156,12 @@ func run() (exitCode int, err error) {
 		if _, err := waitClient.Get("http://" + endpoint); err == nil {
 			break
 		}
-		time.Sleep(25 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			break
+		default:
+			time.Sleep(25 * time.Millisecond)
+		}
 	}
 
 	lambda.StartWithContext(ctx, handler)

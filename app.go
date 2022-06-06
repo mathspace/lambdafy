@@ -63,7 +63,9 @@ func isAccountRegionAllowed(ctx context.Context, acfg aws.Config) (bool, error) 
 }
 
 type deployResult struct {
-	url string
+	url      string
+	image    string
+	function string
 }
 
 // deployApp creates/updates necessary resources for running a lambda function
@@ -74,7 +76,9 @@ func deployApp(c *cli.Context) (*deployResult, error) {
 	}
 	ctx := context.Background()
 
-	log.Print("setting up AWS and docker clients")
+	log.Print("setting up")
+
+	// Setup clients
 
 	acfg, err := awsconfig.LoadDefaultConfig(ctx)
 	if err != nil {
@@ -97,6 +101,9 @@ func deployApp(c *cli.Context) (*deployResult, error) {
 
 	log.Print("building lambda compatible docker image")
 
+	// Extract entrypoint from the given image as it needs to be prefixed with
+	// the proxy command
+
 	inImage := c.Args().First()
 	t := time.UnixMicro(0)
 	outImage := fmt.Sprintf("lambdafied:%d", t.UnixNano())
@@ -114,6 +121,8 @@ func deployApp(c *cli.Context) (*deployResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal entrypoint to json: %s", err)
 	}
+
+	// Build a new docker image with the proxy embedded
 
 	dockerFile := fmt.Sprintf(`
 FROM --platform=linux/amd64 %s
@@ -148,7 +157,9 @@ ENTRYPOINT %s
 	}
 	resp.Body.Close()
 
-	log.Print("determining ECR full repo URL")
+	log.Print("pushing image")
+
+	// Get the full ECR repo URL
 
 	ecrCl := ecr.NewFromConfig(acfg)
 	repOut, err := ecrCl.DescribeRepositories(ctx, &ecr.DescribeRepositoriesInput{
@@ -162,7 +173,7 @@ ENTRYPOINT %s
 	}
 	repoUri := repOut.Repositories[0].RepositoryUri
 
-	log.Print("tagging image")
+	// Get the built image hash to use as tag on ECR
 
 	img, _, err = dc.ImageInspectWithRaw(ctx, outImage)
 	if err != nil {
@@ -179,7 +190,7 @@ ENTRYPOINT %s
 		Force: true,
 	})
 
-	log.Print("logging in to ECR")
+	// Log docker into ECR
 
 	tokResp, err := ecrCl.GetAuthorizationToken(ctx, &ecr.GetAuthorizationTokenInput{})
 	if err != nil {
@@ -198,8 +209,6 @@ ENTRYPOINT %s
 	}
 	regEP := *tokResp.AuthorizationData[0].ProxyEndpoint
 
-	log.Printf("pushing %s", repoImage)
-
 	authCfg := dockertypes.AuthConfig{
 		Username:      authTokenParts[0],
 		Password:      authTokenParts[1],
@@ -207,6 +216,8 @@ ENTRYPOINT %s
 	}
 	authCfgBytes, _ := json.Marshal(authCfg)
 	authCfgEncoded := base64.URLEncoding.EncodeToString(authCfgBytes)
+
+	// Push the image to ECR
 
 	rc, err := dc.ImagePush(ctx, repoImage, dockertypes.ImagePushOptions{
 		RegistryAuth: authCfgEncoded,
@@ -219,6 +230,8 @@ ENTRYPOINT %s
 		return nil, fmt.Errorf("failed to push image: %s", err)
 	}
 	rc.Close()
+
+	// Prepare to create/update lambda function
 
 	if len(spec.Entrypoint) > 0 {
 		spec.Entrypoint = append([]string{"/lambdafy-proxy"}, spec.Entrypoint...)
@@ -272,7 +285,10 @@ ENTRYPOINT %s
 		}
 
 	} else {
-		log.Printf("updating existing lambda function %s", fnName)
+		log.Print("updating existing lambda function")
+
+		// Run the update in a loop ignroing resource conflict errors which occur
+		// for a while after a recent update to the function.
 
 		for {
 			if _, err := lambdaCl.UpdateFunctionCode(ctx, &lambda.UpdateFunctionCodeInput{
@@ -289,6 +305,9 @@ ENTRYPOINT %s
 			}
 			break
 		}
+
+		// Run the update in a loop ignroing resource conflict errors which occur
+		// for a while after a recent update to the function.
 
 		for {
 			if _, err := lambdaCl.UpdateFunctionConfiguration(ctx, &lambda.UpdateFunctionConfigurationInput{
@@ -341,7 +360,6 @@ ENTRYPOINT %s
 		if !strings.Contains(err.Error(), "ResourceNotFoundException") {
 			return nil, fmt.Errorf("failed to get lambda function url config: %s", err)
 		}
-		log.Print("creating lambda function url")
 
 		fOut, err := lambdaCl.CreateFunctionUrlConfig(ctx, &lambda.CreateFunctionUrlConfigInput{
 			AuthType:     lambdatypes.FunctionUrlAuthTypeNone,
@@ -350,9 +368,17 @@ ENTRYPOINT %s
 		if err != nil {
 			return nil, fmt.Errorf("failed to create function url: %s", err)
 		}
-		return &deployResult{url: *fOut.FunctionUrl}, nil
+		return &deployResult{
+			url:      *fOut.FunctionUrl,
+			image:    repoImage,
+			function: fnName,
+		}, nil
 	} else {
-		return &deployResult{url: *fOut.FunctionUrl}, nil
+		return &deployResult{
+			url:      *fOut.FunctionUrl,
+			image:    repoImage,
+			function: fnName,
+		}, nil
 	}
 
 }
