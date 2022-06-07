@@ -1,0 +1,18 @@
+name: Lambdafy
+author: Mathspace Pty. Ltd.
+description: Makes it easy to deploy docker based websites on AWS lambda
+inputs:
+  image:
+    description: Docker image to deploy
+    required: true
+  spec:
+    description: Spec file path
+    required: false
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  env:
+    LAMBDAFY_SPEC: ${{ inputs.spec }}
+  args:
+    - deploy
+    - ${{ inputs.image }}
