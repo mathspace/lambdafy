@@ -8,11 +8,16 @@ inputs:
   spec:
     description: Spec file path
     required: false
+  version:
+    description: Lambdafy version to use
+    required: false 
+    default: "0.0.2"
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
+  using: "docker"
+  image: "Dockerfile"
   env:
     LAMBDAFY_SPEC: ${{ inputs.spec }}
+    LAMBDAFY_VERSION: ${{ inputs.version }}
   args:
     - deploy
     - ${{ inputs.image }}
