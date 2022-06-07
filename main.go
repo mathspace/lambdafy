@@ -57,7 +57,7 @@ func main() {
 				Name:      "spec",
 				Value:     cli.Path("lambdafy-spec.yaml"),
 				Usage:     "Path to spec file used for all commands (in yaml format)",
-				EnvVars:   []string{"LAMBDAFY_APP_SPEC_FILE"},
+				EnvVars:   []string{"LAMBDAFY_SPEC"},
 				TakesFile: true,
 			},
 			&cli.StringFlag{

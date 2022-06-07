@@ -1,4 +1,4 @@
-lambdafy-app-spec.yaml
-proxy-linux-amd64
-.env
-lambdafy
+/lambdafy-app-spec.yaml
+/proxy-linux-amd64
+/.env
+/lambdafy
