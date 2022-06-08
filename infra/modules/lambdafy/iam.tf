@@ -36,6 +36,18 @@ data "aws_iam_policy_document" "ci" {
   }
 
   statement {
+    effect    = "Allow"
+    actions   = ["ecr:*"]
+    resources = ["arn:aws:ecr:*:*:repository/lambdafy"]
+  }
+
+  statement {
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
     effect = "Allow"
     actions = [
       "logs:*",
