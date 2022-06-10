@@ -2,6 +2,7 @@ package appspec
 
 import (
 	"errors"
+	"io"
 	"os"
 
 	"github.com/gobwas/glob"
@@ -37,14 +38,9 @@ func (a *AppSpec) IsAccountRegionAllowed(account, region string) bool {
 	return false
 }
 
-func LoadFromFile(path string) (*AppSpec, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
+func Load(r io.Reader) (*AppSpec, error) {
 	var s AppSpec
-	if err := yaml.NewDecoder(f).Decode(&s); err != nil {
+	if err := yaml.NewDecoder(r).Decode(&s); err != nil {
 		return nil, err
 	}
 	if s.Memory != nil && (*s.Memory < 128 || *s.Memory > 10240) {
@@ -64,4 +60,13 @@ func LoadFromFile(path string) (*AppSpec, error) {
 		s.allowedGlobs = append(s.allowedGlobs, g)
 	}
 	return &s, nil
+}
+
+func LoadFromFile(path string) (*AppSpec, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return Load(f)
 }

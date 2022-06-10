@@ -40,7 +40,11 @@ var (
 // beforeAppCmd runs tasks required before the app related commands are run.
 func beforeAppCmd(c *cli.Context) error {
 	var err error
-	spec, err = appspec.LoadFromFile(c.Path("spec"))
+	if c.Path("spec") == "-" {
+		spec, err = appspec.Load(os.Stdin)
+	} else {
+		spec, err = appspec.LoadFromFile(c.Path("spec"))
+	}
 	if err != nil {
 		return err
 	}
@@ -56,7 +60,7 @@ func main() {
 			&cli.PathFlag{
 				Name:      "spec",
 				Value:     cli.Path("lambdafy-spec.yaml"),
-				Usage:     "Path to spec file used for all commands (in yaml format)",
+				Usage:     "Path to spec file used for all commands (in yaml format). Use - for stdin.",
 				EnvVars:   []string{"LAMBDAFY_SPEC"},
 				TakesFile: true,
 			},
