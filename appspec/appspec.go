@@ -20,7 +20,7 @@ type AppSpec struct {
 	Memory     *int32            `yaml:"memory"`
 	Timeout    *int32            `yaml:"timeout"`
 
-	ReservedConcurrency   int32    `yaml:"reserved_concurrency"`
+	ReservedConcurrency   *int32   `yaml:"reserved_concurrency"`
 	AllowedAccountRegions []string `yaml:"allowed_account_regions"`
 	allowedGlobs          []glob.Glob
 }
@@ -49,8 +49,8 @@ func Load(r io.Reader) (*AppSpec, error) {
 	if s.Timeout != nil && (*s.Timeout < 3 || *s.Timeout > 900) {
 		return nil, errors.New("timeout spec must be between 3 and 900")
 	}
-	if s.ReservedConcurrency < 0 {
-		return nil, errors.New("reserved_concurency spec must >= 0")
+	if s.ReservedConcurrency != nil && *s.ReservedConcurrency < 1 {
+		return nil, errors.New("reserved_concurency spec must be > 0")
 	}
 	for _, a := range s.AllowedAccountRegions {
 		g, err := glob.Compile(a, ':')

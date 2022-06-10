@@ -338,11 +338,19 @@ ENTRYPOINT %s
 		}
 	}
 
-	if _, err := lambdaCl.PutFunctionConcurrency(ctx, &lambda.PutFunctionConcurrencyInput{
-		FunctionName:                 aws.String(fnName),
-		ReservedConcurrentExecutions: aws.Int32(spec.ReservedConcurrency),
-	}); err != nil {
-		return nil, fmt.Errorf("failed to set reserved concurrency: %s", err)
+	if spec.ReservedConcurrency == nil {
+		if _, err := lambdaCl.DeleteFunctionConcurrency(ctx, &lambda.DeleteFunctionConcurrencyInput{
+			FunctionName: aws.String(fnName),
+		}); err != nil {
+			return nil, fmt.Errorf("failed to remove reserved concurrency: %s", err)
+		}
+	} else {
+		if _, err := lambdaCl.PutFunctionConcurrency(ctx, &lambda.PutFunctionConcurrencyInput{
+			FunctionName:                 aws.String(fnName),
+			ReservedConcurrentExecutions: spec.ReservedConcurrency,
+		}); err != nil {
+			return nil, fmt.Errorf("failed to set reserved concurrency: %s", err)
+		}
 	}
 
 	// Create/update lambda function URL
@@ -350,6 +358,7 @@ ENTRYPOINT %s
 	fOut, err := lambdaCl.GetFunctionUrlConfig(ctx, &lambda.GetFunctionUrlConfigInput{
 		FunctionName: aws.String(fnName),
 	})
+	var fnUrl string
 	if err != nil {
 		if !strings.Contains(err.Error(), "ResourceNotFoundException") {
 			return nil, fmt.Errorf("failed to get lambda function url config: %s", err)
@@ -362,21 +371,38 @@ ENTRYPOINT %s
 		if err != nil {
 			return nil, fmt.Errorf("failed to create function url: %s", err)
 		}
-		log.Print("deploy complete")
-		return map[string]string{
-			"url":      *fOut.FunctionUrl,
-			"image":    repoImage,
-			"function": fnName,
-		}, nil
+		fnUrl = *fOut.FunctionUrl
 	} else {
-		log.Print("deploy complete")
-		return map[string]string{
-			"url":      *fOut.FunctionUrl,
-			"image":    repoImage,
-			"function": fnName,
-		}, nil
+		fnUrl = *fOut.FunctionUrl
 	}
 
+	// Wait until function is in active state
+
+activeWait:
+	for {
+		fOut, err := lambdaCl.GetFunction(ctx, &lambda.GetFunctionInput{
+			FunctionName: aws.String(fnName),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed poll function state: %s", err)
+		}
+		switch s := fOut.Configuration.State; s {
+		case lambdatypes.StateActive:
+			break activeWait
+		case lambdatypes.StatePending:
+			time.Sleep(2 * time.Second)
+			continue
+		default:
+			return nil, fmt.Errorf("invalid state while polling: %s", s)
+		}
+	}
+
+	log.Print("deploy complete")
+	return map[string]string{
+		"url":      fnUrl,
+		"image":    repoImage,
+		"function": fnName,
+	}, nil
 }
 
 func deleteApp(c *cli.Context) error {
