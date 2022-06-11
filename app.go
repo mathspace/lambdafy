@@ -70,7 +70,7 @@ func deployApp(c *cli.Context) (map[string]string, error) {
 	}
 	ctx := context.Background()
 
-	log.Print("setting up")
+	log.Print("- setting up")
 
 	// Setup clients
 
@@ -93,8 +93,6 @@ func deployApp(c *cli.Context) (map[string]string, error) {
 		return nil, fmt.Errorf("failed to get docker client: %s", err)
 	}
 
-	log.Print("building lambda compatible docker image")
-
 	// Extract entrypoint from the given image as it needs to be prefixed with
 	// the proxy command
 
@@ -102,18 +100,20 @@ func deployApp(c *cli.Context) (map[string]string, error) {
 	t := time.UnixMicro(0)
 	outImage := fmt.Sprintf("lambdafied:%d", t.UnixNano())
 
+	log.Printf("- building lambda compatible docker image from '%s'", inImage)
+
 	img, _, err := dc.ImageInspectWithRaw(ctx, inImage)
 	if err != nil {
-		return nil, fmt.Errorf("failed to inspect docker image: %s", err)
+		return nil, fmt.Errorf("failed to inspect docker image '%s': %s", inImage, err)
 	}
 
 	if img.Architecture != "amd64" || img.Os != "linux" {
-		return nil, errors.New("image platform must be linux/amd64")
+		return nil, fmt.Errorf("platform of docker image '%s' must be linux/amd64", inImage)
 	}
 
 	ep, err := json.Marshal(append([]string{"/lambdafy-proxy"}, img.Config.Entrypoint...))
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal entrypoint to json: %s", err)
+		return nil, fmt.Errorf("failed to marshal docker image '%s' entrypoint to json: %s", inImage, err)
 	}
 
 	// Build a new docker image with the proxy embedded
@@ -143,15 +143,13 @@ ENTRYPOINT %s
 		SuppressOutput: true,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to build image: %s", err)
+		return nil, fmt.Errorf("failed to build lambdafied image: %s", err)
 	}
 	if err := processDockerResponse(resp.Body); err != nil {
 		resp.Body.Close()
-		return nil, fmt.Errorf("failed to build image: %s", err)
+		return nil, fmt.Errorf("failed to build lambdafied image: %s", err)
 	}
 	resp.Body.Close()
-
-	log.Print("pushing image")
 
 	// Get the full ECR repo URL
 
@@ -171,18 +169,22 @@ ENTRYPOINT %s
 
 	img, _, err = dc.ImageInspectWithRaw(ctx, outImage)
 	if err != nil {
-		return nil, fmt.Errorf("failed to inspect image: %s", err)
+		return nil, fmt.Errorf("failed to inspect lambdafied image '%s': %s", outImage, err)
 	}
 	idSum := sha256.Sum256([]byte(img.ID))
 	repoImage := fmt.Sprintf("%s:%s", *repoUri, hex.EncodeToString(idSum[:]))
 
+	log.Printf("- tagging lambdafied image with '%s'", repoImage)
+
 	if err := dc.ImageTag(ctx, outImage, repoImage); err != nil {
-		return nil, fmt.Errorf("failed to tag image: %s", err)
+		return nil, fmt.Errorf("failed to tag lambdafied image: %s", err)
 	}
 
 	defer dc.ImageRemove(ctx, outImage, dockertypes.ImageRemoveOptions{
 		Force: true,
 	})
+
+	log.Print("- pushing tagged image to ecr")
 
 	// Log docker into ECR
 
@@ -217,11 +219,11 @@ ENTRYPOINT %s
 		RegistryAuth: authCfgEncoded,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to push image: %s", err)
+		return nil, fmt.Errorf("failed to push tagged image '%s': %s", repoImage, err)
 	}
 	if err := processDockerResponse(rc); err != nil {
 		rc.Close()
-		return nil, fmt.Errorf("failed to push image: %s", err)
+		return nil, fmt.Errorf("failed to push tagged image '%s': %s", repoImage, err)
 	}
 	rc.Close()
 
@@ -251,7 +253,7 @@ ENTRYPOINT %s
 			return nil, fmt.Errorf("failed to get lambda function: %T", err)
 		}
 
-		log.Printf("creating new lambda function %s", fnName)
+		log.Printf("- creating new lambda function '%s'", fnName)
 
 		_, err := lambdaCl.CreateFunction(ctx, &lambda.CreateFunctionInput{
 			FunctionName:  aws.String(fnName),
@@ -279,7 +281,7 @@ ENTRYPOINT %s
 		}
 
 	} else {
-		log.Print("updating existing lambda function")
+		log.Printf("- updating existing lambda function '%s'", fnName)
 
 		// Run the update in a loop ignroing resource conflict errors which occur
 		// for a while after a recent update to the function.
@@ -397,7 +399,7 @@ activeWait:
 		}
 	}
 
-	log.Print("deploy complete")
+	log.Print("- deploy complete")
 	return map[string]string{
 		"url":      fnUrl,
 		"image":    repoImage,
@@ -406,6 +408,39 @@ activeWait:
 }
 
 func deleteApp(c *cli.Context) error {
-	// TODO
+
+	ctx := context.Background()
+
+	log.Print("- setting up")
+
+	acfg, err := awsconfig.LoadDefaultConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to load aws config: %s", err)
+	}
+	allowed, err := isAccountRegionAllowed(ctx, acfg)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return fmt.Errorf("aws account and/or region is not allowed by spec")
+	}
+
+	lambdaCl := lambda.NewFromConfig(acfg)
+	fnName := "lambdafy-" + spec.Name
+
+	log.Printf("- deleting lambda function '%s'", fnName)
+
+	if _, err := lambdaCl.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
+		FunctionName: aws.String(fnName),
+	}); err != nil {
+		if strings.Contains(err.Error(), "ResourceNotFoundException") {
+			log.Printf("- no lambda function named '%s' - skipping", fnName)
+		} else {
+			return fmt.Errorf("failed to delete lambda function: %s", err)
+		}
+	}
+
+	log.Print("- done")
+
 	return nil
 }

@@ -101,7 +101,7 @@ func main() {
 			},
 			{
 				Name:   "delete",
-				Usage:  "delete the current deployment",
+				Usage:  "delete the deployment",
 				Before: beforeAppCmd,
 				Action: deleteApp,
 			},
@@ -126,6 +126,6 @@ func main() {
 	}
 	log.SetFlags(0)
 	if err := app.Run(os.Args); err != nil {
-		log.Fatal(err)
+		log.Fatalf("error: %s", err)
 	}
 }
