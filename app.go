@@ -257,6 +257,7 @@ ENTRYPOINT %s
 
 		_, err := lambdaCl.CreateFunction(ctx, &lambda.CreateFunctionInput{
 			FunctionName:  aws.String(fnName),
+			Description:   aws.String(spec.Description),
 			Role:          role.Role.Arn,
 			Architectures: []lambdatypes.Architecture{lambdatypes.ArchitectureX8664},
 			Environment:   &lambdatypes.Environment{Variables: spec.Env},
@@ -308,6 +309,7 @@ ENTRYPOINT %s
 		for {
 			if _, err := lambdaCl.UpdateFunctionConfiguration(ctx, &lambda.UpdateFunctionConfigurationInput{
 				FunctionName: aws.String(fnName),
+				Description:  aws.String(spec.Description),
 				Role:         role.Role.Arn,
 				Environment:  &lambdatypes.Environment{Variables: spec.Env},
 				ImageConfig: &lambdatypes.ImageConfig{

@@ -10,15 +10,16 @@ import (
 )
 
 type AppSpec struct {
-	Name       string            `yaml:"name"`
-	Public     bool              `yaml:"public"`
-	Env        map[string]string `yaml:"env"`
-	Entrypoint []string          `yaml:"entrypoint"`
-	Command    []string          `yaml:"command"`
-	WorkDir    *string           `yaml:"workdir"`
-	Role       string            `yaml:"role"`
-	Memory     *int32            `yaml:"memory"`
-	Timeout    *int32            `yaml:"timeout"`
+	Name        string            `yaml:"name"`
+	Description string            `yaml:"description"`
+	Public      bool              `yaml:"public"`
+	Env         map[string]string `yaml:"env"`
+	Entrypoint  []string          `yaml:"entrypoint"`
+	Command     []string          `yaml:"command"`
+	WorkDir     *string           `yaml:"workdir"`
+	Role        string            `yaml:"role"`
+	Memory      *int32            `yaml:"memory"`
+	Timeout     *int32            `yaml:"timeout"`
 
 	ReservedConcurrency   *int32   `yaml:"reserved_concurrency"`
 	AllowedAccountRegions []string `yaml:"allowed_account_regions"`
@@ -42,6 +43,9 @@ func Load(r io.Reader) (*AppSpec, error) {
 	var s AppSpec
 	if err := yaml.NewDecoder(r).Decode(&s); err != nil {
 		return nil, err
+	}
+	if s.Name == "" {
+		return nil, errors.New("name spec must be specified")
 	}
 	if s.Memory != nil && (*s.Memory < 128 || *s.Memory > 10240) {
 		return nil, errors.New("memory spec must be between 128 and 10240")
