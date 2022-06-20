@@ -1,5 +1,4 @@
-// All resources here are global and thus are created only once in an
-// account.
+// All resources here are global across a single AWS account.
 
 resource "aws_iam_user" "ci" {
   count = var.create_iam_resources ? 1 : 0

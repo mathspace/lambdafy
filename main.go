@@ -21,6 +21,9 @@ var (
 	//go:embed example-app-spec.yaml
 	exampleSpec string
 
+	//go:embed example-custom-role.tf
+	exampleCustomRole string
+
 	outputters = map[string]outputter{
 		"json": func(kv map[string]string) {
 			e := json.NewEncoder(os.Stdout)
@@ -110,6 +113,14 @@ func main() {
 				Usage: "example example spec to stdout",
 				Action: func(c *cli.Context) error {
 					fmt.Print(exampleSpec)
+					return nil
+				},
+			},
+			{
+				Name:  "example-custom-role",
+				Usage: "example custom role in terraform format to stdout",
+				Action: func(c *cli.Context) error {
+					fmt.Print(exampleCustomRole)
 					return nil
 				},
 			},
