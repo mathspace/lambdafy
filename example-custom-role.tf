@@ -28,17 +28,17 @@ data "aws_iam_policy_document" "fn" {
     actions   = ["kms:Decrypt"]
     resources = ["*"]
   }
-  // NOTE: Your custom statements go here
+  // TODO Your custom statements go here
 }
 
 resource "aws_iam_policy" "fn" {
-  name   = "my-custom-function"
+  name   = "my-custom-function" // TODO modify before use
   policy = data.aws_iam_policy_document.fn.json
 }
 
 // NOTE: ARN of the following resource needs to be specified in the spec file
 resource "aws_iam_role" "fn" {
-  name               = "my-custom-function"
+  name               = "my-custom-function" // TODO modify before use
   assume_role_policy = data.aws_iam_policy_document.fn_assume.json
 }
 
