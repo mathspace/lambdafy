@@ -116,13 +116,19 @@ func deployApp(c *cli.Context) (map[string]string, error) {
 		return nil, fmt.Errorf("failed to marshal docker image '%s' entrypoint to json: %s", inImage, err)
 	}
 
+	cmd, err := json.Marshal(img.Config.Cmd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal docker image '%s' command to json: %s", inImage, err)
+	}
+
 	// Build a new docker image with the proxy embedded
 
 	dockerFile := fmt.Sprintf(`
 FROM --platform=linux/amd64 %s
 COPY --chmod=775 lambdafy-proxy /
 ENTRYPOINT %s
-`, inImage, string(ep))
+CMD %s
+`, inImage, string(ep), string(cmd))
 
 	r, w := io.Pipe()
 
