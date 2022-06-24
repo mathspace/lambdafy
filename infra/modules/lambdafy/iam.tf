@@ -29,9 +29,7 @@ data "aws_iam_policy_document" "ci" {
       "iam:PassRole",
       "iam:SimulatePrincipalPolicy",
     ]
-    resources = [
-      aws_iam_role.fn[0].arn,
-    ]
+    resources = ["*"]
   }
 
   statement {
