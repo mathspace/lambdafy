@@ -40,9 +40,9 @@ env:
 # command:
 #  - /my-great-app $FOO --key=$API_KEY
 
-# role is ARN of a IAM role, required if your docker image
-# needs access to AWS resources other than those provided by lambdafy
-# by default.
+# role is the name of a IAM role, required if your docker image needs
+# access to AWS resources other than those provided by lambdafy by
+# default.
 #
 # role: "arn:..."
 
