@@ -15,7 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
-	"github.com/urfave/cli/v2"
 
 	"github.com/mathspace/lambdafy/fnspec"
 )
@@ -195,43 +194,6 @@ activeWait:
 			return fmt.Errorf("invalid state while polling: %s", s)
 		}
 	}
-
-	return nil
-}
-
-func deleteApp(c *cli.Context) error {
-
-	ctx := context.Background()
-
-	log.Print("- setting up")
-
-	acfg, err := awsconfig.LoadDefaultConfig(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to load aws config: %s", err)
-	}
-	allowed, err := isAccountRegionAllowed(ctx, acfg)
-	if err != nil {
-		return err
-	}
-	if !allowed {
-		return fmt.Errorf("aws account and/or region is not allowed by spec")
-	}
-
-	lambdaCl := lambda.NewFromConfig(acfg)
-
-	log.Printf("- deleting lambda function '%s'", spec.Name)
-
-	if _, err := lambdaCl.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
-		FunctionName: aws.String(spec.Name),
-	}); err != nil {
-		if strings.Contains(err.Error(), "ResourceNotFoundException") {
-			log.Printf("- no lambda function named '%s' - skipping", spec.Name)
-		} else {
-			return fmt.Errorf("failed to delete lambda function: %s", err)
-		}
-	}
-
-	log.Print("- done")
 
 	return nil
 }
