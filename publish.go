@@ -3,7 +3,6 @@ package main
 /*
 
 import (
-	"archive/tar"
 	"context"
 	"crypto/sha256"
 	_ "embed"
@@ -12,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"strings"
 	"time"
@@ -38,10 +36,7 @@ func isAccountRegionAllowed(ctx context.Context, acfg aws.Config) (bool, error) 
 	return spec.IsAccountRegionAllowed(*cid.Account, acfg.Region), nil
 }
 
-/*
-// deployApp creates/updates necessary resources for running a lambda function
-// with the given image and spec, exposed via a public URL.
-func deployApp(c *cli.Context) (map[string]string, error) {
+func publish(c *cli.Context) (map[string]string, error) {
 	if c.NArg() != 1 {
 		return nil, fmt.Errorf("must provide a docker image name as first arg")
 	}
@@ -365,4 +360,5 @@ func deleteApp(c *cli.Context) error {
 
 	return nil
 }
+
 */

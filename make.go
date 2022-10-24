@@ -3,25 +3,25 @@ package main
 import (
 	"archive/tar"
 	"context"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	dockertypes "github.com/docker/docker/api/types"
 	dockerclient "github.com/docker/docker/client"
 )
 
-//go:generate sh -c "cd proxy ; CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../proxy-linux-amd64"
+//go:generate sh -c "cd proxy ; CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w' -o ../proxy-linux-amd64"
 
 //go:embed proxy-linux-amd64
 var proxyBinary []byte
 
-var errAlreadyLambdafied = errors.New("docker image already lambdafied")
-
-// makeImage updates the image and adds the lambdafy proxy to it.
+// lambdafyImage modifies the image by adding lambda proxy to it.
 func lambdafyImage(imgName string) error {
 
 	ctx := context.Background()
@@ -44,12 +44,25 @@ func lambdafyImage(imgName string) error {
 		return fmt.Errorf("failed to inspect docker image '%s': %s", imgName, err)
 	}
 
-	if len(img.Config.Entrypoint) > 0 && img.Config.Entrypoint[0] == "/lambdafy-proxy" {
-		return errAlreadyLambdafied
+	// Check if the image is already lambdafied with the same proxy version.
+	// If so, we can skip the rest of the process.
+
+	proxyChksum := sha256.Sum256(proxyBinary)
+	proxyChksumHex := hex.EncodeToString(proxyChksum[:])
+	if proxyChksumHex == img.Config.Labels["lambdafy.proxy.checksum"] {
+		log.Print("image is already lambdafied with the same proxy version - skipping")
+		return nil
 	}
 
 	if img.Architecture != "amd64" || img.Os != "linux" {
 		return fmt.Errorf("platform of docker image '%s' must be linux/amd64", imgName)
+	}
+
+	// In case the image is already lambdafied, we need to remove the old proxy
+	// entry from command line.
+
+	if len(img.Config.Entrypoint) > 0 && img.Config.Entrypoint[0] == "/lambdafy-proxy" {
+		img.Config.Entrypoint = img.Config.Entrypoint[1:]
 	}
 
 	ep, err := json.Marshal(append([]string{"/lambdafy-proxy"}, img.Config.Entrypoint...))
@@ -69,7 +82,8 @@ FROM --platform=linux/amd64 %s
 COPY --chmod=775 lambdafy-proxy /
 ENTRYPOINT %s
 CMD %s
-`, imgName, string(ep), string(cmd))
+LABEL "lambdafy.proxy.checksum"="%s"
+`, imgName, string(ep), string(cmd), proxyChksumHex)
 
 	r, w := io.Pipe()
 

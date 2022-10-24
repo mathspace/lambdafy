@@ -55,24 +55,14 @@ func main() {
 		},
 		Commands: []*cli.Command{
 			{
-				Name:  "make",
-				Usage: "modify the image by adding lambda proxy to it",
-				Flags: []cli.Flag{
-					&cli.BoolFlag{
-						Name:  "ignore-already-lambdafied",
-						Usage: "Ignore image that's already lambdafied instead of throwing error",
-					},
-				},
+				Name:      "make",
+				Usage:     "modify the image by adding lambda proxy to it",
 				ArgsUsage: "image-name",
 				Action: func(c *cli.Context) error {
 					if c.NArg() != 1 {
 						return fmt.Errorf("must provide a docker image name as the only arg")
 					}
-					err := lambdafyImage(c.Args().First())
-					if err == errAlreadyLambdafied && c.Bool("ignore-already-lambdafied") {
-						return nil
-					}
-					return err
+					return lambdafyImage(c.Args().First())
 				},
 			},
 			{
