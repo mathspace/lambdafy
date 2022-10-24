@@ -1,10 +1,14 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+
+	dockerjsonmsg "github.com/docker/docker/pkg/jsonmessage"
 )
 
 func cmdErr(err error) error {
@@ -32,4 +36,22 @@ func copyFile(dst, src string) error {
 		return err
 	}
 	return out.Close()
+}
+
+// processDockerResponse decodes the JSON line stream of docker daemon
+// and determines if there is any error. All other output is discarded.
+func processDockerResponse(r io.Reader) error {
+	d := json.NewDecoder(r)
+	for {
+		var m dockerjsonmsg.JSONMessage
+		if err := d.Decode(&m); err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+		if m.Error != nil {
+			return errors.New(m.Error.Message)
+		}
+	}
 }

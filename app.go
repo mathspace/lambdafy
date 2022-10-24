@@ -1,5 +1,7 @@
 package main
 
+/*
+
 import (
 	"archive/tar"
 	"context"
@@ -24,34 +26,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	dockertypes "github.com/docker/docker/api/types"
 	dockerclient "github.com/docker/docker/client"
-	dockerjsonmsg "github.com/docker/docker/pkg/jsonmessage"
 	"github.com/urfave/cli/v2"
 )
-
-//go:generate sh -c "cd proxy ; CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../proxy-linux-amd64"
-
-var (
-	//go:embed proxy-linux-amd64
-	proxyBinary []byte
-)
-
-// processDockerResponse decodes the JSON line stream of docker daemon
-// and determines if there is any error. All other output is discarded.
-func processDockerResponse(r io.Reader) error {
-	d := json.NewDecoder(r)
-	for {
-		var m dockerjsonmsg.JSONMessage
-		if err := d.Decode(&m); err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil
-			}
-			return err
-		}
-		if m.Error != nil {
-			return errors.New(m.Error.Message)
-		}
-	}
-}
 
 func isAccountRegionAllowed(ctx context.Context, acfg aws.Config) (bool, error) {
 	stsCl := sts.NewFromConfig(acfg)
@@ -62,6 +38,7 @@ func isAccountRegionAllowed(ctx context.Context, acfg aws.Config) (bool, error) 
 	return spec.IsAccountRegionAllowed(*cid.Account, acfg.Region), nil
 }
 
+/*
 // deployApp creates/updates necessary resources for running a lambda function
 // with the given image and spec, exposed via a public URL.
 func deployApp(c *cli.Context) (map[string]string, error) {
@@ -92,70 +69,6 @@ func deployApp(c *cli.Context) (map[string]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get docker client: %s", err)
 	}
-
-	// Extract entrypoint from the given image as it needs to be prefixed with
-	// the proxy command
-
-	inImage := c.Args().First()
-	t := time.UnixMicro(0)
-	outImage := fmt.Sprintf("lambdafied:%d", t.UnixNano())
-
-	log.Printf("- building lambda compatible docker image from '%s'", inImage)
-
-	img, _, err := dc.ImageInspectWithRaw(ctx, inImage)
-	if err != nil {
-		return nil, fmt.Errorf("failed to inspect docker image '%s': %s", inImage, err)
-	}
-
-	if img.Architecture != "amd64" || img.Os != "linux" {
-		return nil, fmt.Errorf("platform of docker image '%s' must be linux/amd64", inImage)
-	}
-
-	ep, err := json.Marshal(append([]string{"/lambdafy-proxy"}, img.Config.Entrypoint...))
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal docker image '%s' entrypoint to json: %s", inImage, err)
-	}
-
-	cmd, err := json.Marshal(img.Config.Cmd)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal docker image '%s' command to json: %s", inImage, err)
-	}
-
-	// Build a new docker image with the proxy embedded
-
-	dockerFile := fmt.Sprintf(`
-FROM --platform=linux/amd64 %s
-COPY --chmod=775 lambdafy-proxy /
-ENTRYPOINT %s
-CMD %s
-`, inImage, string(ep), string(cmd))
-
-	r, w := io.Pipe()
-
-	go func() {
-		tr := tar.NewWriter(w)
-		_ = tr.WriteHeader(&tar.Header{Name: "Dockerfile", Size: int64(len(dockerFile)), ModTime: t, AccessTime: t, ChangeTime: t})
-		_, _ = tr.Write([]byte(dockerFile))
-		_ = tr.WriteHeader(&tar.Header{Name: "lambdafy-proxy", Size: int64(len(proxyBinary)), ModTime: t, AccessTime: t, ChangeTime: t})
-		_, _ = tr.Write(proxyBinary)
-		_ = tr.Close()
-		_ = w.Close()
-	}()
-
-	resp, err := dc.ImageBuild(ctx, r, dockertypes.ImageBuildOptions{
-		Tags:           []string{outImage},
-		Version:        dockertypes.BuilderBuildKit,
-		Platform:       "linux/amd64",
-		SuppressOutput: true,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to build lambdafied image: %s", err)
-	}
-	if err := processDockerResponse(resp.Body); err != nil {
-		resp.Body.Close()
-		return nil, fmt.Errorf("failed to build lambdafied image: %s", err)
-	}
-	resp.Body.Close()
 
 	// Get the full ECR repo URL
 
@@ -452,3 +365,4 @@ func deleteApp(c *cli.Context) error {
 
 	return nil
 }
+*/

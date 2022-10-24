@@ -32,6 +32,7 @@ var (
 	reqCount int32
 )
 
+// handler is the Lambda function handler
 func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPResponse, err error) {
 
 	if verbose {
@@ -98,10 +99,14 @@ func run() (exitCode int, err error) {
 		return 127, fmt.Errorf("usage: %s command [arg [arg [...]]]", os.Args[0])
 	}
 	cmdName := os.Args[1]
-	args := os.Args[2:]
+	args := os.Args[1:]
 
 	if !inLambda {
-		err := syscall.Exec(cmdName, args, os.Environ())
+		path, err := exec.LookPath(cmdName)
+		if err != nil {
+			return 1, fmt.Errorf("cannot find command '%s': %w", cmdName, err)
+		}
+		err = syscall.Exec(path, args, os.Environ())
 		// If Exec succeeds, we'll never get here.
 		return 1, err
 	}
@@ -197,7 +202,7 @@ func main() {
 	log.SetFlags(0)
 	exitCode, err := run()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("lambdafy-proxy: error: %s", err)
 	}
 	os.Exit(exitCode)
 }
