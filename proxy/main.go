@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -27,6 +28,7 @@ var (
 	endpoint = "127.0.0.1:" + strconv.Itoa(port)
 	client   = &http.Client{}
 	verbose  = os.Getenv("LAMBDAFY_PROXY_LOGGING") == "verbose"
+	inLambda = os.Getenv("LAMBDA_TASK_ROOT") != ""
 	reqCount int32
 )
 
@@ -97,6 +99,13 @@ func run() (exitCode int, err error) {
 	}
 	cmdName := os.Args[1]
 	args := os.Args[2:]
+
+	if !inLambda {
+		err := syscall.Exec(cmdName, args, os.Environ())
+		// If Exec succeeds, we'll never get here.
+		return 1, err
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	portStr := strconv.Itoa(port)
@@ -110,14 +119,17 @@ func run() (exitCode int, err error) {
 	// Duplicate own env and add PORT to it, replacing all occurrences of
 	// @@LAMBDAFY_PORT@@
 
-	env := make([]string, 0, len(os.Environ()))
+	env := make([]string, 0, len(os.Environ())+1)
 	for _, v := range os.Environ() {
 		if strings.HasPrefix(v, "PORT=") {
 			continue
 		}
-		env = append(env, strings.ReplaceAll(v, "@@LAMBDAFY_PORT@@", portStr))
+		v = strings.ReplaceAll(v, "@@LAMBDAFY_PORT@@", portStr)
+		env = append(env, v)
 	}
 	env = append(env, fmt.Sprintf("PORT=%d", port))
+
+	// If running outside of lambda, simply replace the current process
 
 	cmd := exec.CommandContext(ctx, cmdName, args...)
 	cmd.Stdin = os.Stdin
@@ -125,6 +137,7 @@ func run() (exitCode int, err error) {
 	cmd.Stderr = os.Stderr
 	cmd.Env = env
 	if err := cmd.Start(); err != nil {
+		cancel()
 		return 127, fmt.Errorf("failed to run command: %s", err)
 	}
 
@@ -137,7 +150,7 @@ func run() (exitCode int, err error) {
 
 	// Pass through all signals to the child process
 
-	sigs := make(chan os.Signal)
+	sigs := make(chan os.Signal, 1)
 	go func() {
 		for s := range sigs {
 			if cmd.Process != nil { // to ignore signals while subcmd is launching
@@ -169,15 +182,15 @@ func run() (exitCode int, err error) {
 	lambda.StartWithContext(ctx, handler)
 
 	// Terminate child process when the proxy exits - usually due to error
+
 	cancel()
 	signal.Stop(sigs)
 	close(sigs)
 
 	if cmd.ProcessState.ExitCode() == -1 {
 		return 127, nil
-	} else {
-		return cmd.ProcessState.ExitCode(), nil
 	}
+	return cmd.ProcessState.ExitCode(), nil
 }
 
 func main() {
