@@ -15,14 +15,15 @@ type Spec struct {
 	Name                  string            `yaml:"name"`
 	Description           string            `yaml:"description"`
 	Image                 string            `yaml:"image"`
+	Role                  string            `yaml:"role"`
 	Env                   map[string]string `yaml:"env"`
 	Entrypoint            []string          `yaml:"entrypoint"`
 	Command               []string          `yaml:"command"`
 	WorkDir               *string           `yaml:"workdir"`
-	Role                  string            `yaml:"role"`
 	Memory                *int32            `yaml:"memory"`
 	Timeout               *int32            `yaml:"timeout"`
 	ReservedConcurrency   *int32            `yaml:"reserved_concurrency"`
+	Tags                  map[string]string `yaml:"tags"`
 	AllowedAccountRegions []string          `yaml:"allowed_account_regions"`
 	allowedGlobs          []glob.Glob
 }
@@ -48,8 +49,8 @@ func Load(r io.Reader) (*Spec, error) {
 	if err := yaml.NewDecoder(r).Decode(&s); err != nil {
 		return nil, err
 	}
-	if s.Name == "" || s.Image == "" {
-		return nil, errors.New("name and image must be specified")
+	if s.Name == "" || s.Image == "" || s.Role == "" {
+		return nil, errors.New("name, image and role must be specified")
 	}
 	if s.Memory != nil && (*s.Memory < 128 || *s.Memory > 10240) {
 		return nil, errors.New("memory must be between 128 and 10240 MB")

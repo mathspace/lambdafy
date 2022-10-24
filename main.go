@@ -17,11 +17,11 @@ type outputter func(map[string]string)
 
 var (
 
-	//go:embed example-app-spec.yaml
+	//go:embed example-spec.yaml
 	exampleSpec string
 
-	//go:embed example-custom-role.tf
-	exampleCustomRole string
+	//go:embed example-role.tf
+	exampleRole string
 
 	outputters = map[string]outputter{
 		"json": func(kv map[string]string) {
@@ -120,6 +120,14 @@ func main() {
 				Usage: "example spec to stdout",
 				Action: func(c *cli.Context) error {
 					fmt.Print(exampleSpec)
+					return nil
+				},
+			},
+			{
+				Name:  "example-role",
+				Usage: "example IAM role in terraform format to stdout",
+				Action: func(c *cli.Context) error {
+					fmt.Print(exampleRole)
 					return nil
 				},
 			},

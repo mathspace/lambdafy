@@ -49,40 +49,34 @@ func publish(specReader io.Reader) error {
 
 	// Prepare to create/update lambda function
 
-	if len(spec.Entrypoint) > 0 {
+	if len(spec.Entrypoint) > 0 && spec.Entrypoint[0] != "/lambdafy-proxy" {
 		spec.Entrypoint = append([]string{"/lambdafy-proxy"}, spec.Entrypoint...)
 	}
 
-	fnName := "lambdafy-" + spec.Name
-	roleName := c.String("default-role")
-	if spec.Role != "" {
-		roleName = spec.Role
-	}
-
 	iamCl := iam.NewFromConfig(acfg)
-	role, err := iamCl.GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(roleName)})
+	role, err := iamCl.GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(spec.Role)})
 	if err != nil {
-		return fmt.Errorf("failed to get lambdafy role: %s", err)
+		return fmt.Errorf("failed to lookup role '%s': %s", spec.Role, err)
 	}
 
 	lambdaCl := lambda.NewFromConfig(acfg)
 	if _, err := lambdaCl.GetFunction(ctx, &lambda.GetFunctionInput{
-		FunctionName: aws.String(fnName),
+		FunctionName: aws.String(spec.Name),
 	}); err != nil {
 		if !strings.Contains(err.Error(), "ResourceNotFoundException") {
-			return fmt.Errorf("failed to get lambda function: %T", err)
+			return fmt.Errorf("failed to lookup function '%s': %s", spec.Name, err)
 		}
 
-		log.Printf("- creating new lambda function '%s'", fnName)
+		log.Printf("- creating new function '%s'", spec.Name)
 
 		_, err := lambdaCl.CreateFunction(ctx, &lambda.CreateFunctionInput{
-			FunctionName:  aws.String(fnName),
+			FunctionName:  aws.String(spec.Name),
 			Description:   aws.String(spec.Description),
 			Role:          role.Role.Arn,
 			Architectures: []lambdatypes.Architecture{lambdatypes.ArchitectureX8664},
 			Environment:   &lambdatypes.Environment{Variables: spec.Env},
 			Code: &lambdatypes.FunctionCode{
-				ImageUri: aws.String(repoImage),
+				ImageUri: aws.String(spec.Image),
 			},
 			ImageConfig: &lambdatypes.ImageConfig{
 				EntryPoint:       spec.Entrypoint,
@@ -93,32 +87,32 @@ func publish(specReader io.Reader) error {
 			PackageType: lambdatypes.PackageTypeImage,
 			Publish:     true,
 			Tags: map[string]string{
-				"Name": fnName,
+				"Name": spec.Name,
 			},
 			Timeout: spec.Timeout,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create lambda function: %s", err)
+			return fmt.Errorf("failed to create function: %s", err)
 		}
 
 	} else {
-		log.Printf("- updating existing lambda function '%s'", fnName)
+		log.Printf("- updating existing function '%s'", spec.Name)
 
 		// Run the update in a loop ignroing resource conflict errors which occur
 		// for a while after a recent update to the function.
 
 		for {
 			if _, err := lambdaCl.UpdateFunctionCode(ctx, &lambda.UpdateFunctionCodeInput{
-				FunctionName:  aws.String(fnName),
+				FunctionName:  aws.String(spec.Name),
 				Architectures: []lambdatypes.Architecture{lambdatypes.ArchitectureX8664},
-				ImageUri:      aws.String(repoImage),
+				ImageUri:      aws.String(spec.Image),
 				Publish:       true,
 			}); err != nil {
 				if strings.Contains(err.Error(), "ResourceConflictException") {
 					time.Sleep(time.Second)
 					continue
 				}
-				return fmt.Errorf("failed to update lambda function code: %s", err)
+				return fmt.Errorf("failed to update function code: %s", err)
 			}
 			break
 		}
@@ -128,7 +122,7 @@ func publish(specReader io.Reader) error {
 
 		for {
 			if _, err := lambdaCl.UpdateFunctionConfiguration(ctx, &lambda.UpdateFunctionConfigurationInput{
-				FunctionName: aws.String(fnName),
+				FunctionName: aws.String(spec.Name),
 				Description:  aws.String(spec.Description),
 				Role:         role.Role.Arn,
 				Environment:  &lambdatypes.Environment{Variables: spec.Env},
@@ -144,16 +138,20 @@ func publish(specReader io.Reader) error {
 					time.Sleep(time.Second)
 					continue
 				}
-				return fmt.Errorf("failed to update lambda function config: %s", err)
+				return fmt.Errorf("failed to update function config: %s", err)
 			}
 			break
 		}
+
+		// Tag the function
+
+		// TODO
 	}
 
 	if _, err := lambdaCl.AddPermission(ctx, &lambda.AddPermissionInput{
 		StatementId:         aws.String("AllowPublicAccess"),
 		Action:              aws.String("lambda:InvokeFunctionUrl"),
-		FunctionName:        aws.String(fnName),
+		FunctionName:        aws.String(spec.Name),
 		Principal:           aws.String("*"),
 		FunctionUrlAuthType: lambdatypes.FunctionUrlAuthTypeNone,
 	}); err != nil {
@@ -164,40 +162,17 @@ func publish(specReader io.Reader) error {
 
 	if spec.ReservedConcurrency == nil {
 		if _, err := lambdaCl.DeleteFunctionConcurrency(ctx, &lambda.DeleteFunctionConcurrencyInput{
-			FunctionName: aws.String(fnName),
+			FunctionName: aws.String(spec.Name),
 		}); err != nil {
 			return fmt.Errorf("failed to remove reserved concurrency: %s", err)
 		}
 	} else {
 		if _, err := lambdaCl.PutFunctionConcurrency(ctx, &lambda.PutFunctionConcurrencyInput{
-			FunctionName:                 aws.String(fnName),
+			FunctionName:                 aws.String(spec.Name),
 			ReservedConcurrentExecutions: spec.ReservedConcurrency,
 		}); err != nil {
 			return fmt.Errorf("failed to set reserved concurrency: %s", err)
 		}
-	}
-
-	// Create/update lambda function URL
-
-	fOut, err := lambdaCl.GetFunctionUrlConfig(ctx, &lambda.GetFunctionUrlConfigInput{
-		FunctionName: aws.String(fnName),
-	})
-	var fnUrl string
-	if err != nil {
-		if !strings.Contains(err.Error(), "ResourceNotFoundException") {
-			return fmt.Errorf("failed to get lambda function url config: %s", err)
-		}
-
-		fOut, err := lambdaCl.CreateFunctionUrlConfig(ctx, &lambda.CreateFunctionUrlConfigInput{
-			AuthType:     lambdatypes.FunctionUrlAuthTypeNone,
-			FunctionName: aws.String(fnName),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create function url: %s", err)
-		}
-		fnUrl = *fOut.FunctionUrl
-	} else {
-		fnUrl = *fOut.FunctionUrl
 	}
 
 	// Wait until function is in active state
@@ -205,7 +180,7 @@ func publish(specReader io.Reader) error {
 activeWait:
 	for {
 		fOut, err := lambdaCl.GetFunction(ctx, &lambda.GetFunctionInput{
-			FunctionName: aws.String(fnName),
+			FunctionName: aws.String(spec.Name),
 		})
 		if err != nil {
 			return fmt.Errorf("failed poll function state: %s", err)
@@ -221,12 +196,7 @@ activeWait:
 		}
 	}
 
-	log.Print("- deploy complete")
-	return map[string]string{
-		"url":      fnUrl,
-		"image":    repoImage,
-		"function": fnName,
-	}, nil
+	return nil
 }
 
 func deleteApp(c *cli.Context) error {
@@ -248,15 +218,14 @@ func deleteApp(c *cli.Context) error {
 	}
 
 	lambdaCl := lambda.NewFromConfig(acfg)
-	fnName := "lambdafy-" + spec.Name
 
-	log.Printf("- deleting lambda function '%s'", fnName)
+	log.Printf("- deleting lambda function '%s'", spec.Name)
 
 	if _, err := lambdaCl.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
-		FunctionName: aws.String(fnName),
+		FunctionName: aws.String(spec.Name),
 	}); err != nil {
 		if strings.Contains(err.Error(), "ResourceNotFoundException") {
-			log.Printf("- no lambda function named '%s' - skipping", fnName)
+			log.Printf("- no lambda function named '%s' - skipping", spec.Name)
 		} else {
 			return fmt.Errorf("failed to delete lambda function: %s", err)
 		}
