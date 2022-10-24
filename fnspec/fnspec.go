@@ -12,25 +12,18 @@ import (
 
 // Spec is the specification of a lambda function.
 type Spec struct {
-	Name        string            `yaml:"name"`
-	Description string            `yaml:"description"`
-	Image       string            `yaml:"image"`
-	Env         map[string]string `yaml:"env"`
-	Entrypoint  []string          `yaml:"entrypoint"`
-	Command     []string          `yaml:"command"`
-	WorkDir     *string           `yaml:"workdir"`
-	Role        string            `yaml:"role"`
-	Memory      *int32            `yaml:"memory"`
-	HealthCheck *struct {
-		Path                *string `yaml:"path"`
-		InitialDelaySeconds *int32  `yaml:"initial_delay_seconds"`
-		PeriodSeconds       *int32  `yaml:"period_seconds"`
-		TimeoutSeconds      *int32  `yaml:"timeout_seconds"`
-		SuccessThreshold    *int32  `yaml:"success_threshold"`
-		FailureThreshold    *int32  `yaml:"failure_threshold"`
-	} `yaml:"healthcheck"`
-	ReservedConcurrency   *int32   `yaml:"reserved_concurrency"`
-	AllowedAccountRegions []string `yaml:"allowed_account_regions"`
+	Name                  string            `yaml:"name"`
+	Description           string            `yaml:"description"`
+	Image                 string            `yaml:"image"`
+	Env                   map[string]string `yaml:"env"`
+	Entrypoint            []string          `yaml:"entrypoint"`
+	Command               []string          `yaml:"command"`
+	WorkDir               *string           `yaml:"workdir"`
+	Role                  string            `yaml:"role"`
+	Memory                *int32            `yaml:"memory"`
+	Timeout               *int32            `yaml:"timeout"`
+	ReservedConcurrency   *int32            `yaml:"reserved_concurrency"`
+	AllowedAccountRegions []string          `yaml:"allowed_account_regions"`
 	allowedGlobs          []glob.Glob
 }
 
@@ -63,6 +56,9 @@ func Load(r io.Reader) (*Spec, error) {
 	}
 	if s.ReservedConcurrency != nil && *s.ReservedConcurrency < 1 {
 		return nil, errors.New("reserved_concurency must be > 0")
+	}
+	if s.Timeout != nil && (*s.Timeout < 3 || *s.Timeout > 900) {
+		return nil, errors.New("timeout spec must be between 3 and 900")
 	}
 	for _, a := range s.AllowedAccountRegions {
 		g, err := glob.Compile(a, ':')
