@@ -56,7 +56,7 @@ func main() {
 		Commands: []*cli.Command{
 			{
 				Name:  "make",
-				Usage: "modify the image by adding lambda proxy to it (no-op if already done)",
+				Usage: "modify the image by adding lambda proxy to it",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  "ignore-already-lambdafied",
@@ -76,13 +76,14 @@ func main() {
 				},
 			},
 			{
-				Name:      "publish",
-				Usage:     "publish a new version of a function (or create function if new)",
-				ArgsUsage: "spec-file",
+				Name:        "publish",
+				Usage:       "publish a new version of a function (or create function if new)",
+				ArgsUsage:   "spec-file",
+				Description: "Use '-' as spec-file to read from stdin.",
 			},
 			{
 				Name:      "deploy",
-				Usage:     "deploy the image",
+				Usage:     "deploy a specific version of a function",
 				ArgsUsage: "function-name version",
 			},
 			{
