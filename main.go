@@ -55,9 +55,9 @@ func main() {
 		},
 		Commands: []*cli.Command{
 			{
-				Name:      "image",
-				Usage:     "modify the image by adding a lambda proxy to it",
-				ArgsUsage: "name",
+				Name:      "make",
+				Usage:     "modify the image by adding lambda proxy to it (no-op if already done)",
+				ArgsUsage: "image-name",
 			},
 			{
 				Name:      "publish",
@@ -67,29 +67,29 @@ func main() {
 			{
 				Name:      "deploy",
 				Usage:     "deploy the image",
-				ArgsUsage: "function version",
+				ArgsUsage: "function-name version",
 			},
 			{
 				Name:      "delete",
 				Usage:     "delete the function",
-				ArgsUsage: "function",
+				ArgsUsage: "function-name",
 			},
 			{
 				Name:    "list",
 				Aliases: []string{"ls"},
-				Usage:   "list published functions",
+				Usage:   "list functions",
 			},
 			{
 				Name:      "info",
 				Aliases:   []string{"i"},
 				Usage:     "print out info about a function",
-				ArgsUsage: "function",
+				ArgsUsage: "function-name",
 			},
 			{
 				Name:      "versions",
 				Aliases:   []string{"ver"},
 				Usage:     "list versions of a function",
-				ArgsUsage: "function",
+				ArgsUsage: "function-name",
 			},
 			{
 				Name:  "example-spec",
