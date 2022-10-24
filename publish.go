@@ -1,145 +1,51 @@
 package main
 
-/*
-
 import (
 	"context"
-	"crypto/sha256"
 	_ "embed"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
 	"fmt"
+	"io"
 	"log"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
-	dockertypes "github.com/docker/docker/api/types"
-	dockerclient "github.com/docker/docker/client"
 	"github.com/urfave/cli/v2"
+
+	"github.com/mathspace/lambdafy/fnspec"
 )
 
-func isAccountRegionAllowed(ctx context.Context, acfg aws.Config) (bool, error) {
-	stsCl := sts.NewFromConfig(acfg)
-	cid, err := stsCl.GetCallerIdentity(ctx, nil)
+// publish publishes the lambda function to AWS.
+func publish(specReader io.Reader) error {
+	spec, err := fnspec.Load(specReader)
 	if err != nil {
-		return false, fmt.Errorf("failed to get aws account number: %s", err)
+		return fmt.Errorf("failed to load function spec: %s", err)
 	}
-	return spec.IsAccountRegionAllowed(*cid.Account, acfg.Region), nil
-}
 
-func publish(c *cli.Context) (map[string]string, error) {
-	if c.NArg() != 1 {
-		return nil, fmt.Errorf("must provide a docker image name as first arg")
-	}
 	ctx := context.Background()
-
-	log.Print("- setting up")
 
 	// Setup clients
 
 	acfg, err := awsconfig.LoadDefaultConfig(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load aws config: %s", err)
+		return fmt.Errorf("failed to load aws config: %s", err)
 	}
-	allowed, err := isAccountRegionAllowed(ctx, acfg)
+
+	// Is the region allowed by spec?
+
+	stsCl := sts.NewFromConfig(acfg)
+	cid, err := stsCl.GetCallerIdentity(ctx, nil)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to get aws account number: %s", err)
 	}
-	if !allowed {
-		return nil, fmt.Errorf("aws account and/or region is not allowed by spec")
+	if !spec.IsAccountRegionAllowed(*cid.Account, acfg.Region) {
+		return fmt.Errorf("aws account and/or region is not allowed by spec")
 	}
-	dc, err := dockerclient.NewClientWithOpts(
-		dockerclient.WithAPIVersionNegotiation(),
-		dockerclient.FromEnv,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get docker client: %s", err)
-	}
-
-	// Get the full ECR repo URL
-
-	ecrCl := ecr.NewFromConfig(acfg)
-	repOut, err := ecrCl.DescribeRepositories(ctx, &ecr.DescribeRepositoriesInput{
-		RepositoryNames: []string{c.String("ecr-repo")},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get list of ecr repos: %s", err)
-	}
-	if len(repOut.Repositories) < 1 {
-		return nil, fmt.Errorf("cannot find lambdafy ecr repo - is infra in place?")
-	}
-	repoUri := repOut.Repositories[0].RepositoryUri
-
-	// Get the built image hash to use as tag on ECR
-
-	img, _, err = dc.ImageInspectWithRaw(ctx, outImage)
-	if err != nil {
-		return nil, fmt.Errorf("failed to inspect lambdafied image '%s': %s", outImage, err)
-	}
-	idSum := sha256.Sum256([]byte(img.ID))
-	repoImage := fmt.Sprintf("%s:%s", *repoUri, hex.EncodeToString(idSum[:]))
-
-	log.Printf("- tagging lambdafied image with '%s'", repoImage)
-
-	if err := dc.ImageTag(ctx, outImage, repoImage); err != nil {
-		return nil, fmt.Errorf("failed to tag lambdafied image: %s", err)
-	}
-
-	defer dc.ImageRemove(ctx, outImage, dockertypes.ImageRemoveOptions{
-		Force: true,
-	})
-
-	log.Print("- pushing tagged image to ecr")
-
-	// Log docker into ECR
-
-	tokResp, err := ecrCl.GetAuthorizationToken(ctx, &ecr.GetAuthorizationTokenInput{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get ecr auth token: %s", err)
-	}
-	if len(tokResp.AuthorizationData) < 1 {
-		return nil, fmt.Errorf("missing ecr auth token")
-	}
-	authToken, err := base64.StdEncoding.DecodeString(*tokResp.AuthorizationData[0].AuthorizationToken)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode ecr auth token: %s", err)
-	}
-	authTokenParts := strings.SplitN(string(authToken), ":", 2)
-	if len(authTokenParts) != 2 {
-		return nil, errors.New("invalid ecr auth token")
-	}
-	regEP := *tokResp.AuthorizationData[0].ProxyEndpoint
-
-	authCfg := dockertypes.AuthConfig{
-		Username:      authTokenParts[0],
-		Password:      authTokenParts[1],
-		ServerAddress: regEP,
-	}
-	authCfgBytes, _ := json.Marshal(authCfg)
-	authCfgEncoded := base64.URLEncoding.EncodeToString(authCfgBytes)
-
-	// Push the image to ECR
-
-	rc, err := dc.ImagePush(ctx, repoImage, dockertypes.ImagePushOptions{
-		RegistryAuth: authCfgEncoded,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to push tagged image '%s': %s", repoImage, err)
-	}
-	if err := processDockerResponse(rc); err != nil {
-		rc.Close()
-		return nil, fmt.Errorf("failed to push tagged image '%s': %s", repoImage, err)
-	}
-	rc.Close()
 
 	// Prepare to create/update lambda function
 
@@ -156,7 +62,7 @@ func publish(c *cli.Context) (map[string]string, error) {
 	iamCl := iam.NewFromConfig(acfg)
 	role, err := iamCl.GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(roleName)})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get lambdafy role: %s", err)
+		return fmt.Errorf("failed to get lambdafy role: %s", err)
 	}
 
 	lambdaCl := lambda.NewFromConfig(acfg)
@@ -164,7 +70,7 @@ func publish(c *cli.Context) (map[string]string, error) {
 		FunctionName: aws.String(fnName),
 	}); err != nil {
 		if !strings.Contains(err.Error(), "ResourceNotFoundException") {
-			return nil, fmt.Errorf("failed to get lambda function: %T", err)
+			return fmt.Errorf("failed to get lambda function: %T", err)
 		}
 
 		log.Printf("- creating new lambda function '%s'", fnName)
@@ -192,7 +98,7 @@ func publish(c *cli.Context) (map[string]string, error) {
 			Timeout: spec.Timeout,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to create lambda function: %s", err)
+			return fmt.Errorf("failed to create lambda function: %s", err)
 		}
 
 	} else {
@@ -212,7 +118,7 @@ func publish(c *cli.Context) (map[string]string, error) {
 					time.Sleep(time.Second)
 					continue
 				}
-				return nil, fmt.Errorf("failed to update lambda function code: %s", err)
+				return fmt.Errorf("failed to update lambda function code: %s", err)
 			}
 			break
 		}
@@ -238,7 +144,7 @@ func publish(c *cli.Context) (map[string]string, error) {
 					time.Sleep(time.Second)
 					continue
 				}
-				return nil, fmt.Errorf("failed to update lambda function config: %s", err)
+				return fmt.Errorf("failed to update lambda function config: %s", err)
 			}
 			break
 		}
@@ -252,7 +158,7 @@ func publish(c *cli.Context) (map[string]string, error) {
 		FunctionUrlAuthType: lambdatypes.FunctionUrlAuthTypeNone,
 	}); err != nil {
 		if !strings.Contains(err.Error(), "already exists") {
-			return nil, fmt.Errorf("failed to add public access permission: %s", err)
+			return fmt.Errorf("failed to add public access permission: %s", err)
 		}
 	}
 
@@ -260,14 +166,14 @@ func publish(c *cli.Context) (map[string]string, error) {
 		if _, err := lambdaCl.DeleteFunctionConcurrency(ctx, &lambda.DeleteFunctionConcurrencyInput{
 			FunctionName: aws.String(fnName),
 		}); err != nil {
-			return nil, fmt.Errorf("failed to remove reserved concurrency: %s", err)
+			return fmt.Errorf("failed to remove reserved concurrency: %s", err)
 		}
 	} else {
 		if _, err := lambdaCl.PutFunctionConcurrency(ctx, &lambda.PutFunctionConcurrencyInput{
 			FunctionName:                 aws.String(fnName),
 			ReservedConcurrentExecutions: spec.ReservedConcurrency,
 		}); err != nil {
-			return nil, fmt.Errorf("failed to set reserved concurrency: %s", err)
+			return fmt.Errorf("failed to set reserved concurrency: %s", err)
 		}
 	}
 
@@ -279,7 +185,7 @@ func publish(c *cli.Context) (map[string]string, error) {
 	var fnUrl string
 	if err != nil {
 		if !strings.Contains(err.Error(), "ResourceNotFoundException") {
-			return nil, fmt.Errorf("failed to get lambda function url config: %s", err)
+			return fmt.Errorf("failed to get lambda function url config: %s", err)
 		}
 
 		fOut, err := lambdaCl.CreateFunctionUrlConfig(ctx, &lambda.CreateFunctionUrlConfigInput{
@@ -302,7 +208,7 @@ activeWait:
 			FunctionName: aws.String(fnName),
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed poll function state: %s", err)
+			return fmt.Errorf("failed poll function state: %s", err)
 		}
 		switch s := fOut.Configuration.State; s {
 		case lambdatypes.StateActive:
@@ -311,7 +217,7 @@ activeWait:
 			time.Sleep(2 * time.Second)
 			continue
 		default:
-			return nil, fmt.Errorf("invalid state while polling: %s", s)
+			return fmt.Errorf("invalid state while polling: %s", s)
 		}
 	}
 
@@ -360,5 +266,3 @@ func deleteApp(c *cli.Context) error {
 
 	return nil
 }
-
-*/

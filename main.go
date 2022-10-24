@@ -3,20 +3,19 @@ package main
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
 	_ "github.com/oxplot/starenv/autoload"
 	"github.com/urfave/cli/v2"
-
-	"github.com/mathspace/lambdafy/appspec"
 )
 
 type outputter func(map[string]string)
 
 var (
-	spec *appspec.AppSpec
 
 	//go:embed example-app-spec.yaml
 	exampleSpec string
@@ -70,6 +69,24 @@ func main() {
 				Usage:       "publish a new version of a function (or create function if new)",
 				ArgsUsage:   "spec-file",
 				Description: "Use '-' as spec-file to read from stdin.",
+				Action: func(c *cli.Context) error {
+					if c.NArg() != 1 {
+						return errors.New("must provide a spec file as the only arg")
+					}
+					p := c.Args().First()
+					var r io.Reader
+					if p == "-" {
+						r = os.Stdin
+					} else {
+						f, err := os.Open(p)
+						if err != nil {
+							return fmt.Errorf("failed to open spec file: %s", err)
+						}
+						defer f.Close()
+						r = f
+					}
+					return publish(r)
+				},
 			},
 			{
 				Name:      "deploy",
