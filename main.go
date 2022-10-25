@@ -66,7 +66,7 @@ func main() {
 			},
 			{
 				Name:        "publish",
-				Usage:       "publish a new version of a function (or create function if new)",
+				Usage:       "publish a new version of a function without routing traffic to it",
 				ArgsUsage:   "spec-file",
 				Description: "Use '-' as spec-file to read from stdin.",
 				Action: func(c *cli.Context) error {
@@ -85,7 +85,12 @@ func main() {
 						defer f.Close()
 						r = f
 					}
-					return publish(r)
+					out, err := publish(r)
+					if err != nil {
+						return err
+					}
+					log.Printf("published new version: %s", out.version)
+					return nil
 				},
 			},
 			{

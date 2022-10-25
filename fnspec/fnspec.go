@@ -10,6 +10,11 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+type EFSMount struct {
+	ARN  string `yaml:"arn"`
+	Path string `yaml:"path"`
+}
+
 // Spec is the specification of a lambda function.
 type Spec struct {
 	Name                  string            `yaml:"name"`
@@ -22,8 +27,11 @@ type Spec struct {
 	WorkDir               *string           `yaml:"workdir"`
 	Memory                *int32            `yaml:"memory"`
 	Timeout               *int32            `yaml:"timeout"`
-	ReservedConcurrency   *int32            `yaml:"reserved_concurrency"`
 	Tags                  map[string]string `yaml:"tags"`
+	VPCSecurityGroupIds   []string          `yaml:"vpc_security_group_ids"`
+	VPCSubnetIds          []string          `yaml:"vpc_subnet_ids"`
+	EFSMounts             []EFSMount        `yaml:"efs_mounts"`
+	TempSize              *int32            `yaml:"temp_size"`
 	AllowedAccountRegions []string          `yaml:"allowed_account_regions"`
 	allowedGlobs          []glob.Glob
 }
@@ -54,9 +62,6 @@ func Load(r io.Reader) (*Spec, error) {
 	}
 	if s.Memory != nil && (*s.Memory < 128 || *s.Memory > 10240) {
 		return nil, errors.New("memory must be between 128 and 10240 MB")
-	}
-	if s.ReservedConcurrency != nil && *s.ReservedConcurrency < 1 {
-		return nil, errors.New("reserved_concurency must be > 0")
 	}
 	if s.Timeout != nil && (*s.Timeout < 3 || *s.Timeout > 900) {
 		return nil, errors.New("timeout spec must be between 3 and 900")

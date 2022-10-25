@@ -16,10 +16,25 @@ resource "aws_iam_role" "fn" {
     policy = jsonencode({
       Version = "2012-10-17"
       Statement = [
+        // Allow VPC access from lambda
+        {
+          Effect = "Allow"
+          Action = [
+            "logs:CreateLogGroup",
+            "logs:CreateLogStream",
+            "logs:PutLogEvents",
+            "ec2:CreateNetworkInterface",
+            "ec2:DescribeNetworkInterfaces",
+            "ec2:DeleteNetworkInterface",
+            "ec2:AssignPrivateIpAddresses",
+            "ec2:UnassignPrivateIpAddresses",
+          ]
+          Resource = ["*"]
+        },
         // TODO your custom statements go here. E.g.:
         // {
-        //   Action   = ["ssm:GetParameter"]
         //   Effect   = "Allow"
+        //   Action   = ["ssm:GetParameter"]
         //   Resource = ["arn:aws:ssm:*:*:parameter/my_fn/*"]
         // },
       ]

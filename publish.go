@@ -19,11 +19,17 @@ import (
 	"github.com/mathspace/lambdafy/fnspec"
 )
 
+// publishResult holds the results of a publish operation.
+type publishResult struct {
+	arn     string
+	version string
+}
+
 // publish publishes the lambda function to AWS.
-func publish(specReader io.Reader) error {
+func publish(specReader io.Reader) (res publishResult, err error) {
 	spec, err := fnspec.Load(specReader)
 	if err != nil {
-		return fmt.Errorf("failed to load function spec: %s", err)
+		return res, fmt.Errorf("failed to load function spec: %s", err)
 	}
 
 	ctx := context.Background()
@@ -32,7 +38,7 @@ func publish(specReader io.Reader) error {
 
 	acfg, err := awsconfig.LoadDefaultConfig(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to load aws config: %s", err)
+		return res, fmt.Errorf("failed to load aws config: %s", err)
 	}
 
 	// Is the region allowed by spec?
@@ -40,10 +46,10 @@ func publish(specReader io.Reader) error {
 	stsCl := sts.NewFromConfig(acfg)
 	cid, err := stsCl.GetCallerIdentity(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to get aws account number: %s", err)
+		return res, fmt.Errorf("failed to get aws account number: %s", err)
 	}
 	if !spec.IsAccountRegionAllowed(*cid.Account, acfg.Region) {
-		return fmt.Errorf("aws account and/or region is not allowed by spec")
+		return res, fmt.Errorf("aws account and/or region is not allowed by spec")
 	}
 
 	// Prepare to create/update lambda function
@@ -55,20 +61,43 @@ func publish(specReader io.Reader) error {
 	iamCl := iam.NewFromConfig(acfg)
 	role, err := iamCl.GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(spec.Role)})
 	if err != nil {
-		return fmt.Errorf("failed to lookup role '%s': %s", spec.Role, err)
+		return res, fmt.Errorf("failed to lookup role '%s': %s", spec.Role, err)
+	}
+
+	tags := make(map[string]string, len(spec.Tags))
+	tags["Name"] = spec.Name
+	for k, v := range spec.Tags {
+		tags[k] = v
+	}
+
+	var vpc *lambdatypes.VpcConfig
+	if len(spec.VPCSubnetIds) > 0 || len(spec.VPCSecurityGroupIds) > 0 {
+		vpc = &lambdatypes.VpcConfig{
+			SubnetIds:        spec.VPCSubnetIds,
+			SecurityGroupIds: spec.VPCSecurityGroupIds,
+		}
+	}
+
+	fsConfig := make([]lambdatypes.FileSystemConfig, len(spec.EFSMounts))
+	for i, m := range spec.EFSMounts {
+		fsConfig[i] = lambdatypes.FileSystemConfig{
+			Arn:            aws.String(m.ARN),
+			LocalMountPath: aws.String(m.Path),
+		}
 	}
 
 	lambdaCl := lambda.NewFromConfig(acfg)
-	if _, err := lambdaCl.GetFunction(ctx, &lambda.GetFunctionInput{
+	fn, err := lambdaCl.GetFunction(ctx, &lambda.GetFunctionInput{
 		FunctionName: aws.String(spec.Name),
-	}); err != nil {
+	})
+	if err != nil {
 		if !strings.Contains(err.Error(), "ResourceNotFoundException") {
-			return fmt.Errorf("failed to lookup function '%s': %s", spec.Name, err)
+			return res, fmt.Errorf("failed to lookup function '%s': %s", spec.Name, err)
 		}
 
 		log.Printf("- creating new function '%s'", spec.Name)
 
-		_, err := lambdaCl.CreateFunction(ctx, &lambda.CreateFunctionInput{
+		r, err := lambdaCl.CreateFunction(ctx, &lambda.CreateFunctionInput{
 			FunctionName:  aws.String(spec.Name),
 			Description:   aws.String(spec.Description),
 			Role:          role.Role.Arn,
@@ -82,22 +111,55 @@ func publish(specReader io.Reader) error {
 				Command:          spec.Command,
 				WorkingDirectory: spec.WorkDir,
 			},
-			MemorySize:  spec.Memory,
-			PackageType: lambdatypes.PackageTypeImage,
-			Publish:     true,
-			Tags: map[string]string{
-				"Name": spec.Name,
-			},
-			Timeout: spec.Timeout,
+			FileSystemConfigs: fsConfig,
+			MemorySize:        spec.Memory,
+			PackageType:       lambdatypes.PackageTypeImage,
+			Publish:           true,
+			Tags:              tags,
+			Timeout:           spec.Timeout,
+			VpcConfig:         vpc,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create function: %s", err)
+			return res, fmt.Errorf("failed to create function: %s", err)
 		}
+		res.arn = *r.FunctionArn
+		res.version = *r.Version
 
 	} else {
 		log.Printf("- updating existing function '%s'", spec.Name)
 
-		// Run the update in a loop ignroing resource conflict errors which occur
+		// Run the update in a loop ignoring resource conflict errors which occur
+		// for a while after a recent update to the function.
+
+		for {
+			r, err := lambdaCl.UpdateFunctionConfiguration(ctx, &lambda.UpdateFunctionConfigurationInput{
+				FunctionName: aws.String(spec.Name),
+				Description:  aws.String(spec.Description),
+				Role:         role.Role.Arn,
+				Environment:  &lambdatypes.Environment{Variables: spec.Env},
+				ImageConfig: &lambdatypes.ImageConfig{
+					EntryPoint:       spec.Entrypoint,
+					Command:          spec.Command,
+					WorkingDirectory: spec.WorkDir,
+				},
+				FileSystemConfigs: fsConfig,
+				MemorySize:        spec.Memory,
+				Timeout:           spec.Timeout,
+				VpcConfig:         vpc,
+			})
+			if err != nil {
+				if strings.Contains(err.Error(), "ResourceConflictException") {
+					time.Sleep(time.Second)
+					continue
+				}
+				return res, fmt.Errorf("failed to update function config: %s", err)
+			}
+			res.arn = *r.FunctionArn
+			res.version = *r.Version
+			break
+		}
+
+		// Run the update in a loop ignoring resource conflict errors which occur
 		// for a while after a recent update to the function.
 
 		for {
@@ -111,67 +173,36 @@ func publish(specReader io.Reader) error {
 					time.Sleep(time.Second)
 					continue
 				}
-				return fmt.Errorf("failed to update function code: %s", err)
+				return res, fmt.Errorf("failed to update function code: %s", err)
 			}
 			break
 		}
 
-		// Run the update in a loop ignroing resource conflict errors which occur
-		// for a while after a recent update to the function.
+		// Re-tag the function
 
-		for {
-			if _, err := lambdaCl.UpdateFunctionConfiguration(ctx, &lambda.UpdateFunctionConfigurationInput{
-				FunctionName: aws.String(spec.Name),
-				Description:  aws.String(spec.Description),
-				Role:         role.Role.Arn,
-				Environment:  &lambdatypes.Environment{Variables: spec.Env},
-				ImageConfig: &lambdatypes.ImageConfig{
-					EntryPoint:       spec.Entrypoint,
-					Command:          spec.Command,
-					WorkingDirectory: spec.WorkDir,
-				},
-				MemorySize: spec.Memory,
-				Timeout:    spec.Timeout,
-			}); err != nil {
-				if strings.Contains(err.Error(), "ResourceConflictException") {
-					time.Sleep(time.Second)
-					continue
-				}
-				return fmt.Errorf("failed to update function config: %s", err)
+		if _, err := lambdaCl.TagResource(ctx, &lambda.TagResourceInput{
+			Resource: fn.Configuration.FunctionArn,
+			Tags:     tags,
+		}); err != nil {
+			return res, fmt.Errorf("failed to tag function: %s", err)
+		}
+
+		// Untag old tags
+
+		oldTags := []string{}
+		for k := range fn.Tags {
+			if _, ok := tags[k]; !ok {
+				oldTags = append(oldTags, k)
 			}
-			break
 		}
 
-		// Tag the function
-
-		// TODO
-	}
-
-	if _, err := lambdaCl.AddPermission(ctx, &lambda.AddPermissionInput{
-		StatementId:         aws.String("AllowPublicAccess"),
-		Action:              aws.String("lambda:InvokeFunctionUrl"),
-		FunctionName:        aws.String(spec.Name),
-		Principal:           aws.String("*"),
-		FunctionUrlAuthType: lambdatypes.FunctionUrlAuthTypeNone,
-	}); err != nil {
-		if !strings.Contains(err.Error(), "already exists") {
-			return fmt.Errorf("failed to add public access permission: %s", err)
-		}
-	}
-
-	if spec.ReservedConcurrency == nil {
-		if _, err := lambdaCl.DeleteFunctionConcurrency(ctx, &lambda.DeleteFunctionConcurrencyInput{
-			FunctionName: aws.String(spec.Name),
+		if _, err := lambdaCl.UntagResource(ctx, &lambda.UntagResourceInput{
+			Resource: fn.Configuration.FunctionArn,
+			TagKeys:  oldTags,
 		}); err != nil {
-			return fmt.Errorf("failed to remove reserved concurrency: %s", err)
+			return res, fmt.Errorf("failed to old tags: %s", err)
 		}
-	} else {
-		if _, err := lambdaCl.PutFunctionConcurrency(ctx, &lambda.PutFunctionConcurrencyInput{
-			FunctionName:                 aws.String(spec.Name),
-			ReservedConcurrentExecutions: spec.ReservedConcurrency,
-		}); err != nil {
-			return fmt.Errorf("failed to set reserved concurrency: %s", err)
-		}
+
 	}
 
 	// Wait until function is in active state
@@ -182,7 +213,7 @@ activeWait:
 			FunctionName: aws.String(spec.Name),
 		})
 		if err != nil {
-			return fmt.Errorf("failed poll function state: %s", err)
+			return res, fmt.Errorf("failed poll function state: %s", err)
 		}
 		switch s := fOut.Configuration.State; s {
 		case lambdatypes.StateActive:
@@ -191,9 +222,9 @@ activeWait:
 			time.Sleep(2 * time.Second)
 			continue
 		default:
-			return fmt.Errorf("invalid state while polling: %s", s)
+			return res, fmt.Errorf("invalid state while polling: %s", s)
 		}
 	}
 
-	return nil
+	return res, nil
 }
