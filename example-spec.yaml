@@ -18,7 +18,7 @@ image: nginx
 # role is the name of a IAM role.
 # Run `lambdafy example-role` to see terraform definition for a basic
 # role needed to run the lambda function.
-role: "arn:..."
+role: my-great-app-role
 
 # env defines the environmental variables available to the app. The
 # values follow the format for https://pkg.go.dev/github.com/oxplot/starenv
@@ -71,7 +71,7 @@ role: "arn:..."
 
 # temp_size is the amount of temporary/ephemeral storage available to
 # each invokation of the function in MB. Defaults to 512.
-# 
+#
 # temp_size: 1024
 
 # efs_mounts is the list of AWS Elastic File System mounts.
@@ -79,6 +79,15 @@ role: "arn:..."
 # efs_mounts:
 #   - arn: ...             # EFS endpoint ARN
 #     path: /mnt/database  # Mount path inside the function
+
+# Needed to allow the function to talk to resources running inside a
+# VPC.
+#
+# vpc_security_group_ids:
+#   - "sg-1234678"
+#   - "sg-6573452"
+# vpc_subnet_ids:
+#   - "34623423"
 
 # allowed_account_regions is a list of account:region that specify which
 # AWS account and region combinations are allowed to be deployed to.
