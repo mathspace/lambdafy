@@ -10,9 +10,10 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// EFSMount represents an AWS Elastic Filesystem mount.
 type EFSMount struct {
-	ARN  string `yaml:"arn"`
-	Path string `yaml:"path"`
+	ARN  string `yaml:"arn"`  // ARN of the EFS filesystem endpoint.
+	Path string `yaml:"path"` // Path to mount the EFS filesystem at.
 }
 
 // Spec is the specification of a lambda function.
@@ -33,7 +34,7 @@ type Spec struct {
 	EFSMounts             []EFSMount        `yaml:"efs_mounts"`
 	TempSize              *int32            `yaml:"temp_size"`
 	AllowedAccountRegions []string          `yaml:"allowed_account_regions"`
-	allowedGlobs          []glob.Glob
+	allowedGlobs          []glob.Glob       `yaml:"-"`
 }
 
 // IsAccountRegionAllowed returns true if the given account and region are
@@ -65,6 +66,9 @@ func Load(r io.Reader) (*Spec, error) {
 	}
 	if s.Timeout != nil && (*s.Timeout < 3 || *s.Timeout > 900) {
 		return nil, errors.New("timeout spec must be between 3 and 900")
+	}
+	if s.TempSize != nil && (*s.TempSize < 512 || *s.TempSize > 10240) {
+		return nil, errors.New("temp_size spec must be between 512 and 10240")
 	}
 	for _, a := range s.AllowedAccountRegions {
 		g, err := glob.Compile(a, ':')

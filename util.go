@@ -11,6 +11,7 @@ import (
 	dockerjsonmsg "github.com/docker/docker/pkg/jsonmessage"
 )
 
+// cmdErr returns the stderr of a command if it fails.
 func cmdErr(err error) error {
 	if exitErr, ok := err.(*exec.ExitError); ok {
 		return fmt.Errorf("%s: %s", err, string(exitErr.Stderr))
@@ -18,6 +19,7 @@ func cmdErr(err error) error {
 	return err
 }
 
+// copyFile copies a file from src to dst. If dst does not exist, it will be created.
 func copyFile(dst, src string) error {
 	in, err := os.Open(src)
 	if err != nil {

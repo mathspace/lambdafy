@@ -1,3 +1,5 @@
+# Commented out items are optional. Rest are required.
+
 # name is used for AWS resources and to uniquely identify the app
 # Using the same name in the same AWS account and region will result in
 # conflict and overwriting behavior.
@@ -59,12 +61,31 @@ role: "arn:..."
 #
 # timeout: 30
 
+# tags will be applied to the function as regular AWS resource tags.
+# Tag `Name` will be applied by default set to the function name defined
+# above. It can be overriden here.
+#
+# tags:
+#   environment: production
+#   team: data-science
+
+# temp_size is the amount of temporary/ephemeral storage available to
+# each invokation of the function in MB. Defaults to 512.
+# 
+# temp_size: 1024
+
+# efs_mounts is the list of AWS Elastic File System mounts.
+#
+# efs_mounts:
+#   - arn: ...             # EFS endpoint ARN
+#     path: /mnt/database  # Mount path inside the function
+
 # allowed_account_regions is a list of account:region that specify which
 # AWS account and region combinations are allowed to be deployed to.
 # This ensures accidental overwrites do not happen. Wildcards can be
 # used for both account and region parts.
 # If unspecified, all regions and all accounts are allowed.
-allowed_account_regions:
-  - "*:*" # any account and any region
+#
+# allowed_account_regions:
 #   - "*:us-*"  # any account and us regions
 #   - "123456789:ap-southeast-2"  # specific region of specific account
