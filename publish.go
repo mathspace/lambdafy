@@ -128,11 +128,10 @@ func publish(specReader io.Reader) (res publishResult, err error) {
 	} else {
 		log.Printf("- updating existing function '%s'", spec.Name)
 
-		// Run the update in a loop ignoring resource conflict errors which occur
-		// for a while after a recent update to the function.
+		// Update function config
 
-		for {
-			r, err := lambdaCl.UpdateFunctionConfiguration(ctx, &lambda.UpdateFunctionConfigurationInput{
+		if err := retryOnResourceConflict(func() error {
+			_, err := lambdaCl.UpdateFunctionConfiguration(ctx, &lambda.UpdateFunctionConfigurationInput{
 				FunctionName: aws.String(spec.Name),
 				Description:  aws.String(spec.Description),
 				Role:         role.Role.Arn,
@@ -147,35 +146,28 @@ func publish(specReader io.Reader) (res publishResult, err error) {
 				Timeout:           spec.Timeout,
 				VpcConfig:         vpc,
 			})
-			if err != nil {
-				if strings.Contains(err.Error(), "ResourceConflictException") {
-					time.Sleep(time.Second)
-					continue
-				}
-				return res, fmt.Errorf("failed to update function config: %s", err)
-			}
-			res.arn = *r.FunctionArn
-			res.version = *r.Version
-			break
+			return err
+		}); err != nil {
+			return res, fmt.Errorf("failed to update function config: %s", err)
 		}
 
-		// Run the update in a loop ignoring resource conflict errors which occur
-		// for a while after a recent update to the function.
+		// Update function code
 
-		for {
-			if _, err := lambdaCl.UpdateFunctionCode(ctx, &lambda.UpdateFunctionCodeInput{
+		if err := retryOnResourceConflict(func() error {
+			r, err := lambdaCl.UpdateFunctionCode(ctx, &lambda.UpdateFunctionCodeInput{
 				FunctionName:  aws.String(spec.Name),
 				Architectures: []lambdatypes.Architecture{lambdatypes.ArchitectureX8664},
 				ImageUri:      aws.String(spec.Image),
 				Publish:       true,
-			}); err != nil {
-				if strings.Contains(err.Error(), "ResourceConflictException") {
-					time.Sleep(time.Second)
-					continue
-				}
-				return res, fmt.Errorf("failed to update function code: %s", err)
+			})
+			if err != nil {
+				return err
 			}
-			break
+			res.arn = *r.FunctionArn
+			res.version = *r.Version
+			return nil
+		}); err != nil {
+			return res, fmt.Errorf("failed to update function code: %s", err)
 		}
 
 		// Re-tag the function
@@ -196,11 +188,13 @@ func publish(specReader io.Reader) (res publishResult, err error) {
 			}
 		}
 
-		if _, err := lambdaCl.UntagResource(ctx, &lambda.UntagResourceInput{
-			Resource: fn.Configuration.FunctionArn,
-			TagKeys:  oldTags,
-		}); err != nil {
-			return res, fmt.Errorf("failed to old tags: %s", err)
+		if len(oldTags) > 0 {
+			if _, err := lambdaCl.UntagResource(ctx, &lambda.UntagResourceInput{
+				Resource: fn.Configuration.FunctionArn,
+				TagKeys:  oldTags,
+			}); err != nil {
+				return res, fmt.Errorf("failed to remove old tags: %s", err)
+			}
 		}
 
 	}

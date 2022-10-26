@@ -7,9 +7,21 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
+	"time"
 
 	dockerjsonmsg "github.com/docker/docker/pkg/jsonmessage"
 )
+
+func retryOnResourceConflict(fn func() error) error {
+	for {
+		err := fn()
+		if err == nil || !strings.Contains(err.Error(), "ResourceConflictException") {
+			return err
+		}
+		time.Sleep(time.Second)
+	}
+}
 
 // cmdErr returns the stderr of a command if it fails.
 func cmdErr(err error) error {
