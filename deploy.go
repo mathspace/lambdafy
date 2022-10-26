@@ -25,7 +25,7 @@ func deploy(fnName string, version string) (string, error) {
 
 	// Create or update "active" alias
 
-	if err := retryOnResourceConflict(func() error {
+	if err := retryOnInProgressUpdate(func() error {
 		_, err := lambdaCl.CreateAlias(ctx, &lambda.CreateAliasInput{
 			FunctionName:    &fnName,
 			FunctionVersion: &version,
@@ -36,7 +36,7 @@ func deploy(fnName string, version string) (string, error) {
 		if !strings.Contains(err.Error(), "already exists") {
 			return "", fmt.Errorf("failed to create function alias 'active': %s", err)
 		}
-		if err := retryOnResourceConflict(func() error {
+		if err := retryOnInProgressUpdate(func() error {
 			_, err := lambdaCl.UpdateAlias(ctx, &lambda.UpdateAliasInput{
 				FunctionName:    &fnName,
 				FunctionVersion: &version,
@@ -52,7 +52,7 @@ func deploy(fnName string, version string) (string, error) {
 
 	var fnURL string
 	var cfuc *lambda.CreateFunctionUrlConfigOutput
-	if err := retryOnResourceConflict(func() error {
+	if err := retryOnInProgressUpdate(func() error {
 		cfuc, err = lambdaCl.CreateFunctionUrlConfig(ctx, &lambda.CreateFunctionUrlConfigInput{
 			AuthType:     lambdatypes.FunctionUrlAuthTypeNone,
 			FunctionName: aws.String(fnName),
@@ -60,10 +60,10 @@ func deploy(fnName string, version string) (string, error) {
 		})
 		return err
 	}); err != nil {
-		if !strings.Contains(err.Error(), "already exists") {
+		if !strings.Contains(err.Error(), "exists for this") {
 			return "", fmt.Errorf("failed to create function URL for alias 'active': %s", err)
 		}
-		if err := retryOnResourceConflict(func() error {
+		if err := retryOnInProgressUpdate(func() error {
 			ufuc, err := lambdaCl.UpdateFunctionUrlConfig(ctx, &lambda.UpdateFunctionUrlConfigInput{
 				AuthType:     lambdatypes.FunctionUrlAuthTypeNone,
 				FunctionName: aws.String(fnName),
@@ -80,7 +80,7 @@ func deploy(fnName string, version string) (string, error) {
 
 	// Add public access permission
 
-	if err := retryOnResourceConflict(func() error {
+	if err := retryOnInProgressUpdate(func() error {
 		_, err := lambdaCl.AddPermission(ctx, &lambda.AddPermissionInput{
 			StatementId:         aws.String("AllowPublicAccess"),
 			Action:              aws.String("lambda:InvokeFunctionUrl"),

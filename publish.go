@@ -129,7 +129,7 @@ func publish(specReader io.Reader) (res publishResult, err error) {
 
 		// Update function config
 
-		if err := retryOnResourceConflict(func() error {
+		if err := retryOnInProgressUpdate(func() error {
 			_, err := lambdaCl.UpdateFunctionConfiguration(ctx, &lambda.UpdateFunctionConfigurationInput{
 				FunctionName: aws.String(spec.Name),
 				Description:  aws.String(spec.Description),
@@ -152,7 +152,7 @@ func publish(specReader io.Reader) (res publishResult, err error) {
 
 		// Update function code
 
-		if err := retryOnResourceConflict(func() error {
+		if err := retryOnInProgressUpdate(func() error {
 			r, err := lambdaCl.UpdateFunctionCode(ctx, &lambda.UpdateFunctionCodeInput{
 				FunctionName:  aws.String(spec.Name),
 				Architectures: []lambdatypes.Architecture{lambdatypes.ArchitectureX8664},
