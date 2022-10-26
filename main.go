@@ -101,7 +101,15 @@ func main() {
 					if c.NArg() != 2 {
 						return errors.New("must provide a function name and version as args")
 					}
-					return deploy(c.Args().First(), c.Args().Get(1))
+					fnName := c.Args().Get(0)
+					version := c.Args().Get(1)
+
+					fnURL, err := deploy(fnName, version)
+					if err != nil {
+						return err
+					}
+					log.Printf("deployed function `%s` version `%s` to '%s'", fnName, version, fnURL)
+					return nil
 				},
 			},
 			{

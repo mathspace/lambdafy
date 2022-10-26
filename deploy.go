@@ -11,6 +11,7 @@ import (
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 )
 
+// publish publishes the lambda function to AWS and returns the function URL.
 func deploy(fnName string, version string) (string, error) {
 	ctx := context.Background()
 
