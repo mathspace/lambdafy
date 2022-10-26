@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	dockerjsonmsg "github.com/docker/docker/pkg/jsonmessage"
 )
 
@@ -66,6 +69,27 @@ func processDockerResponse(r io.Reader) error {
 		}
 		if m.Error != nil {
 			return errors.New(m.Error.Message)
+		}
+	}
+}
+
+// waitOnFunc waits for a lambda function to be ready.
+func waitOnFunc(ctx context.Context, lambdaCl *lambda.Client, fnName string) error {
+	for {
+		fOut, err := lambdaCl.GetFunction(ctx, &lambda.GetFunctionInput{
+			FunctionName: &fnName,
+		})
+		if err != nil {
+			return fmt.Errorf("failed poll function state: %s", err)
+		}
+		switch s := fOut.Configuration.State; s {
+		case lambdatypes.StateActive:
+			return nil
+		case lambdatypes.StatePending:
+			time.Sleep(2 * time.Second)
+			continue
+		default:
+			return fmt.Errorf("invalid state while polling: %s", s)
 		}
 	}
 }

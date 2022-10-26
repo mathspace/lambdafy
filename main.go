@@ -97,6 +97,12 @@ func main() {
 				Name:      "deploy",
 				Usage:     "deploy a specific version of a function",
 				ArgsUsage: "function-name version",
+				Action: func(c *cli.Context) error {
+					if c.NArg() != 2 {
+						return errors.New("must provide a function name and version as args")
+					}
+					return deploy(c.Args().First(), c.Args().Get(1))
+				},
 			},
 			{
 				Name:      "delete",

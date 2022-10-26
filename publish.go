@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -199,26 +198,5 @@ func publish(specReader io.Reader) (res publishResult, err error) {
 
 	}
 
-	// Wait until function is in active state
-
-activeWait:
-	for {
-		fOut, err := lambdaCl.GetFunction(ctx, &lambda.GetFunctionInput{
-			FunctionName: aws.String(spec.Name),
-		})
-		if err != nil {
-			return res, fmt.Errorf("failed poll function state: %s", err)
-		}
-		switch s := fOut.Configuration.State; s {
-		case lambdatypes.StateActive:
-			break activeWait
-		case lambdatypes.StatePending:
-			time.Sleep(2 * time.Second)
-			continue
-		default:
-			return res, fmt.Errorf("invalid state while polling: %s", s)
-		}
-	}
-
-	return res, nil
+	return res, waitOnFunc(ctx, lambdaCl, spec.Name)
 }
