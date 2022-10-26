@@ -11,6 +11,8 @@ import (
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 )
 
+const activeAlias = "lambdafy-active"
+
 // publish publishes the lambda function to AWS and returns the function URL.
 func deploy(fnName string, version string) (string, error) {
 	ctx := context.Background()
@@ -23,24 +25,24 @@ func deploy(fnName string, version string) (string, error) {
 	}
 	lambdaCl := lambda.NewFromConfig(acfg)
 
-	// Create or update "active" alias
+	// Create or update active alias
 
-	if err := retryOnInProgressUpdate(func() error {
+	if err := retryOnResourceConflict(func() error {
 		_, err := lambdaCl.CreateAlias(ctx, &lambda.CreateAliasInput{
 			FunctionName:    &fnName,
 			FunctionVersion: &version,
-			Name:            aws.String("active"),
+			Name:            aws.String(activeAlias),
 		})
 		return err
 	}); err != nil {
 		if !strings.Contains(err.Error(), "already exists") {
 			return "", fmt.Errorf("failed to create function alias 'active': %s", err)
 		}
-		if err := retryOnInProgressUpdate(func() error {
+		if err := retryOnResourceConflict(func() error {
 			_, err := lambdaCl.UpdateAlias(ctx, &lambda.UpdateAliasInput{
 				FunctionName:    &fnName,
 				FunctionVersion: &version,
-				Name:            aws.String("active"),
+				Name:            aws.String(activeAlias),
 			})
 			return err
 		}); err != nil {
@@ -52,22 +54,22 @@ func deploy(fnName string, version string) (string, error) {
 
 	var fnURL string
 	var cfuc *lambda.CreateFunctionUrlConfigOutput
-	if err := retryOnInProgressUpdate(func() error {
+	if err := retryOnResourceConflict(func() error {
 		cfuc, err = lambdaCl.CreateFunctionUrlConfig(ctx, &lambda.CreateFunctionUrlConfigInput{
 			AuthType:     lambdatypes.FunctionUrlAuthTypeNone,
 			FunctionName: aws.String(fnName),
-			Qualifier:    aws.String("active"),
+			Qualifier:    aws.String(activeAlias),
 		})
 		return err
 	}); err != nil {
 		if !strings.Contains(err.Error(), "exists for this") {
 			return "", fmt.Errorf("failed to create function URL for alias 'active': %s", err)
 		}
-		if err := retryOnInProgressUpdate(func() error {
+		if err := retryOnResourceConflict(func() error {
 			ufuc, err := lambdaCl.UpdateFunctionUrlConfig(ctx, &lambda.UpdateFunctionUrlConfigInput{
 				AuthType:     lambdatypes.FunctionUrlAuthTypeNone,
 				FunctionName: aws.String(fnName),
-				Qualifier:    aws.String("active"),
+				Qualifier:    aws.String(activeAlias),
 			})
 			fnURL = *ufuc.FunctionUrl
 			return err
@@ -80,13 +82,13 @@ func deploy(fnName string, version string) (string, error) {
 
 	// Add public access permission
 
-	if err := retryOnInProgressUpdate(func() error {
+	if err := retryOnResourceConflict(func() error {
 		_, err := lambdaCl.AddPermission(ctx, &lambda.AddPermissionInput{
 			StatementId:         aws.String("AllowPublicAccess"),
 			Action:              aws.String("lambda:InvokeFunctionUrl"),
 			FunctionName:        &fnName,
 			Principal:           aws.String("*"),
-			Qualifier:           aws.String("active"),
+			Qualifier:           aws.String(activeAlias),
 			FunctionUrlAuthType: lambdatypes.FunctionUrlAuthTypeNone,
 		})
 		return err

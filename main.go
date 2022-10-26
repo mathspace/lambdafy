@@ -2,7 +2,6 @@ package main
 
 import (
 	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,27 +15,11 @@ import (
 type outputter func(map[string]string)
 
 var (
-
 	//go:embed example-spec.yaml
 	exampleSpec string
 
 	//go:embed example-role.tf
 	exampleRole string
-
-	outputters = map[string]outputter{
-		"json": func(kv map[string]string) {
-			e := json.NewEncoder(os.Stdout)
-			e.SetIndent("", "  ")
-			e.Encode(kv)
-		},
-		"text": func(kv map[string]string) {
-			for k, v := range kv {
-				fmt.Printf("%s: %s\n", k, v)
-			}
-		},
-	}
-
-	outp outputter
 )
 
 func main() {
@@ -89,7 +72,7 @@ func main() {
 					if err != nil {
 						return err
 					}
-					log.Printf("published new version: %s", out.version)
+					fmt.Printf("published version:%s\n", out.version)
 					return nil
 				},
 			},
@@ -116,11 +99,36 @@ func main() {
 				Name:      "delete",
 				Usage:     "delete the function",
 				ArgsUsage: "function-name",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "yes",
+						Usage: "Actually delete the function",
+					},
+				},
+				Action: func(c *cli.Context) error {
+					if c.NArg() != 1 {
+						return errors.New("must provide a function name as the only arg")
+					}
+					if !c.Bool("yes") {
+						return errors.New("must pass --yes to actually delete the function")
+					}
+					return deleteFunction(c.Args().First())
+				},
 			},
 			{
 				Name:    "list",
 				Aliases: []string{"ls"},
 				Usage:   "list functions",
+				Action: func(c *cli.Context) error {
+					fns, err := listFunctions()
+					if err != nil {
+						return err
+					}
+					for _, f := range fns {
+						fmt.Println(f)
+					}
+					return nil
+				},
 			},
 			{
 				Name:      "info",
@@ -150,13 +158,6 @@ func main() {
 					return nil
 				},
 			},
-		},
-		Before: func(c *cli.Context) error {
-			outp = outputters[c.String("output")]
-			if outp == nil {
-				return fmt.Errorf("--output must be text or json")
-			}
-			return nil
 		},
 		EnableBashCompletion: true,
 		Suggest:              true,

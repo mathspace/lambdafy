@@ -16,10 +16,10 @@ import (
 	dockerjsonmsg "github.com/docker/docker/pkg/jsonmessage"
 )
 
-func retryOnInProgressUpdate(fn func() error) error {
+func retryOnResourceConflict(fn func() error) error {
 	for {
 		err := fn()
-		if err == nil || !strings.Contains(err.Error(), "n update is in progress for resource") {
+		if err == nil || strings.Contains(err.Error(), "exists") || !strings.Contains(err.Error(), "ResourceConflictException") {
 			return err
 		}
 		time.Sleep(time.Second)
