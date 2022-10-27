@@ -100,3 +100,24 @@ func deploy(fnName string, version string) (string, error) {
 
 	return fnURL, waitOnFunc(ctx, lambdaCl, fnName)
 }
+
+func undeploy(fnName string) error {
+	ctx := context.Background()
+	acfg, err := awsconfig.LoadDefaultConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to load aws config: %s", err)
+	}
+	lambdaCl := lambda.NewFromConfig(acfg)
+
+	if err := retryOnResourceConflict(func() error {
+		_, err := lambdaCl.DeleteAlias(ctx, &lambda.DeleteAliasInput{
+			FunctionName: &fnName,
+			Name:         aws.String(activeAlias),
+		})
+		return err
+	}); err != nil && !strings.Contains(err.Error(), "404") {
+		return err
+	}
+
+	return nil
+}

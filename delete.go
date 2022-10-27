@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -21,7 +22,7 @@ func deleteFunction(name string) error {
 			FunctionName: &name,
 		})
 		return err
-	}); err != nil {
+	}); err != nil && !strings.Contains(err.Error(), "404") {
 		return err
 	}
 
