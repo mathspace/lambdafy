@@ -107,11 +107,10 @@ LABEL "lambdafy.proxy.checksum"="%s"
 	if err != nil {
 		return fmt.Errorf("failed to build lambdafied image: %s", err)
 	}
+	defer resp.Body.Close()
 	if err := processDockerResponse(resp.Body); err != nil {
-		resp.Body.Close()
 		return fmt.Errorf("failed to build lambdafied image: %s", err)
 	}
-	resp.Body.Close()
 
 	return nil
 }
