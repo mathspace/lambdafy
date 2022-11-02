@@ -20,6 +20,7 @@ import (
 // publishResult holds the results of a publish operation.
 type publishResult struct {
 	arn     string
+	name    string
 	version string
 }
 
@@ -29,6 +30,7 @@ func publish(specReader io.Reader) (res publishResult, err error) {
 	if err != nil {
 		return res, fmt.Errorf("failed to load function spec: %s", err)
 	}
+	res.name = spec.Name
 
 	ctx := context.Background()
 

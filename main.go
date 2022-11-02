@@ -64,6 +64,7 @@ func main() {
 					if err != nil {
 						return err
 					}
+					fmt.Printf("function name:%s\n", out.name)
 					fmt.Printf("published version:%s\n", out.version)
 					return nil
 				},
