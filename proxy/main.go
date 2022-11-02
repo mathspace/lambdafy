@@ -30,10 +30,13 @@ var (
 	verbose  = os.Getenv("LAMBDAFY_PROXY_LOGGING") == "verbose"
 	inLambda = os.Getenv("LAMBDA_TASK_ROOT") != ""
 	reqCount int32
+	started  = make(chan struct{})
 )
 
 // handler is the Lambda function handler
 func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPResponse, err error) {
+
+	<-started
 
 	if verbose {
 		log.Printf("req #%d : %#v", atomic.AddInt32(&reqCount, 1), req)
@@ -113,6 +116,11 @@ func run() (exitCode int, err error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Start listening for traffic as soon as possible, otherwise lambda will
+	// throw timeout errors.
+
+	lambda.StartWithContext(ctx, handler)
+
 	portStr := strconv.Itoa(port)
 
 	// Replace @@LAMBDAFY_PORT@@ in all arguments
@@ -184,7 +192,9 @@ func run() (exitCode int, err error) {
 		}
 	}
 
-	lambda.StartWithContext(ctx, handler)
+	// Unblock the request handler
+
+	close(started)
 
 	// Terminate child process when the proxy exits - usually due to error
 
