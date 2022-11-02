@@ -64,8 +64,8 @@ func main() {
 					if err != nil {
 						return err
 					}
-					fmt.Printf("function name:%s\n", out.name)
-					fmt.Printf("published version:%s\n", out.version)
+					fmt.Printf("function-name:%s\n", out.name)
+					fmt.Printf("published-version:%s\n", out.version)
 					return nil
 				},
 			},
@@ -162,8 +162,8 @@ func main() {
 					fmt.Printf("name:%s\n", inf.name)
 					fmt.Printf("image:%s\n", inf.image)
 					fmt.Printf("role:%s\n", inf.role)
-					fmt.Printf("active version:%s\n", inf.activeVersion)
-					fmt.Printf("last modified:%s\n", inf.lastUpdated)
+					fmt.Printf("active-version:%s\n", inf.activeVersion)
+					fmt.Printf("last-modified:%s\n", inf.lastUpdated)
 					return nil
 				},
 			},

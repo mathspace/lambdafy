@@ -141,7 +141,7 @@ func deploy(fnName string, version string) (string, error) {
 
 	// Wait for function to stabilize
 
-	return activeFnURL, waitOnFunc(ctx, lambdaCl, fnName)
+	return activeFnURL, nil
 }
 
 func undeploy(fnName string) error {
