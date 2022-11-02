@@ -25,12 +25,12 @@ var (
 func main() {
 	app := &cli.App{
 		Name:        "lambdafy",
-		Usage:       "Greatly simplifies deployment of lambda functions on AWS",
+		Usage:       "Use any docker image as a lambda function",
 		Description: "If .env file exists, it will be used to populate env vars.",
 		Commands: []*cli.Command{
 			{
 				Name:      "make",
-				Usage:     "modify the image by adding lambda proxy to it",
+				Usage:     "modify the image by adding lambdafy proxy to it",
 				ArgsUsage: "image-name",
 				Action: func(c *cli.Context) error {
 					if c.NArg() != 1 {
