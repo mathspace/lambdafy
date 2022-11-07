@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -131,6 +132,9 @@ func deploy(fnName string, version string) (string, error) {
 			return "", fmt.Errorf("failed to create request: %s", err)
 		}
 		resp, err = http.DefaultClient.Do(req)
+		if errors.Is(err, context.DeadlineExceeded) {
+			break
+		}
 		if err == nil && resp.StatusCode >= 200 && resp.StatusCode < 400 {
 			break
 		}
@@ -138,7 +142,11 @@ func deploy(fnName string, version string) (string, error) {
 	}
 
 	if err != nil {
-		return "", fmt.Errorf("function check failed - aborting deploy: %s", err)
+		if errors.Is(err, context.DeadlineExceeded) {
+			log.Print("timed out waiting for function to return success")
+		} else {
+			return "", fmt.Errorf("function check failed - aborting deploy: %s", err)
+		}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return "", fmt.Errorf("function check failed - aborting deploy: last status = %s", resp.Status)
