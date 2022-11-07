@@ -26,7 +26,6 @@ const port = 19987
 
 var (
 	endpoint = "127.0.0.1:" + strconv.Itoa(port)
-	client   = &http.Client{}
 	verbose  = os.Getenv("LAMBDAFY_PROXY_LOGGING") == "verbose"
 	inLambda = os.Getenv("LAMBDA_TASK_ROOT") != ""
 	reqCount int32
@@ -76,7 +75,7 @@ func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPRes
 		log.Printf("proxied req #%d : %#v", reqNum, r)
 	}
 
-	s, err := client.Do(r)
+	s, err := http.DefaultClient.Do(r)
 	if err != nil {
 		return
 	}
