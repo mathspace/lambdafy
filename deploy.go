@@ -126,8 +126,9 @@ func deploy(fnName string, version string) (string, error) {
 	defer cancel()
 
 	var resp *http.Response
+	var req *http.Request
 	for {
-		req, err := http.NewRequestWithContext(ctxDl, http.MethodGet, preactiveFnURL, nil)
+		req, err = http.NewRequestWithContext(ctxDl, http.MethodGet, preactiveFnURL, nil)
 		if err != nil {
 			return "", fmt.Errorf("failed to create request: %s", err)
 		}
@@ -143,6 +144,9 @@ func deploy(fnName string, version string) (string, error) {
 
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
+			if resp == nil {
+				return "", errors.New("timed out waiting for function to return success")
+			}
 			log.Print("timed out waiting for function to return success")
 		} else {
 			return "", fmt.Errorf("function check failed - aborting deploy: %s", err)
