@@ -105,6 +105,9 @@ func run() (exitCode int, err error) {
 	args := os.Args[1:]
 
 	if !inLambda {
+		if verbose {
+			log.Print("not running in lambda - exec the command directly")
+		}
 		path, err := exec.LookPath(cmdName)
 		if err != nil {
 			return 1, fmt.Errorf("cannot find command '%s': %w", cmdName, err)
@@ -119,7 +122,12 @@ func run() (exitCode int, err error) {
 	// Start listening for traffic as soon as possible, otherwise lambda will
 	// throw timeout errors.
 
-	lambda.StartWithContext(ctx, handler)
+	lambdaStopped := make(chan struct{})
+
+	go func() {
+		defer close(lambdaStopped)
+		lambda.StartWithContext(ctx, handler)
+	}()
 
 	portStr := strconv.Itoa(port)
 
@@ -188,13 +196,17 @@ func run() (exitCode int, err error) {
 		case <-ctx.Done():
 			break
 		default:
-			time.Sleep(25 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 
 	// Unblock the request handler
 
 	close(started)
+
+	// Wait for lambda listener to stop
+
+	<-lambdaStopped
 
 	// Terminate child process when the proxy exits - usually due to error
 
