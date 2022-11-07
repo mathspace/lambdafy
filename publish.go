@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -95,6 +96,8 @@ func publish(specReader io.Reader) (res publishResult, err error) {
 			return res, fmt.Errorf("failed to lookup function '%s': %s", spec.Name, err)
 		}
 
+		log.Printf("creating new function '%s'", spec.Name)
+
 		r, err := lambdaCl.CreateFunction(ctx, &lambda.CreateFunctionInput{
 			FunctionName:  aws.String(spec.Name),
 			Description:   aws.String(spec.Description),
@@ -124,6 +127,8 @@ func publish(specReader io.Reader) (res publishResult, err error) {
 		res.version = *r.Version
 
 	} else {
+
+		log.Printf("updating existing function '%s'", spec.Name)
 
 		// Update function config
 
@@ -195,6 +200,8 @@ func publish(specReader io.Reader) (res publishResult, err error) {
 		}
 
 	}
+
+	log.Printf("waiting for function to become ready")
 
 	return res, waitOnFunc(ctx, lambdaCl, spec.Name)
 }

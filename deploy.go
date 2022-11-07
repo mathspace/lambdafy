@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -109,6 +110,8 @@ func deploy(fnName string, version string) (string, error) {
 	// Prepare preactive deploy:
 	// Once we ensure the function works, we will switch the active alias to point to this version.
 
+	log.Printf("deploying to staging endpoint for testing")
+
 	preactiveFnURL, err := prepareDeploy(ctx, lambdaCl, fnName, version, preactiveAlias)
 	if err != nil {
 		return "", err
@@ -116,13 +119,22 @@ func deploy(fnName string, version string) (string, error) {
 
 	// Loop until the funciton returns a 2XX/3XX response.
 
+	log.Printf("waiting for '%s' to return success", preactiveFnURL)
+
+	ctxDl, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
 	var resp *http.Response
-	for i := 0; i < 10; i++ {
-		resp, err = http.Get(preactiveFnURL)
+	for {
+		req, err := http.NewRequestWithContext(ctxDl, http.MethodGet, preactiveFnURL, nil)
+		if err != nil {
+			return "", fmt.Errorf("failed to create request: %s", err)
+		}
+		resp, err = http.DefaultClient.Do(req)
 		if err == nil && resp.StatusCode >= 200 && resp.StatusCode < 400 {
 			break
 		}
-		time.Sleep(time.Second * 6)
+		time.Sleep(time.Second)
 	}
 
 	if err != nil {
@@ -133,6 +145,8 @@ func deploy(fnName string, version string) (string, error) {
 	}
 
 	// Prepare active deploy.
+
+	log.Printf("staging success - deploying to active endpoint")
 
 	activeFnURL, err := prepareDeploy(ctx, lambdaCl, fnName, version, activeAlias)
 	if err != nil {
