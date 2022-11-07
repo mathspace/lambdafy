@@ -79,6 +79,7 @@ func lambdafyImage(imgName string) error {
 
 	dockerFile := fmt.Sprintf(`
 FROM --platform=linux/amd64 %s
+RUN rm -f /lambdafy-proxy
 COPY --chmod=775 lambdafy-proxy /
 ENTRYPOINT %s
 CMD %s

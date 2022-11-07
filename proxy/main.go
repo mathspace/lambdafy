@@ -38,8 +38,10 @@ func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPRes
 
 	<-started
 
+	reqNum := atomic.AddInt32(&reqCount, 1)
+
 	if verbose {
-		log.Printf("req #%d : %#v", atomic.AddInt32(&reqCount, 1), req)
+		log.Printf("incoming req #%d : %#v", reqNum, req)
 	}
 
 	// Build standard HTTP request from the API Gateway request
@@ -63,13 +65,22 @@ func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPRes
 		return
 	}
 	for k, v := range req.Headers {
-		r.Header.Add(k, v)
+		if strings.ToLower(k) == "host" {
+			r.Host = v
+		} else {
+			r.Header.Add(k, v)
+		}
+	}
+
+	if verbose {
+		log.Printf("proxied req #%d : %#v", reqNum, r)
 	}
 
 	s, err := client.Do(r)
 	if err != nil {
 		return
 	}
+	defer s.Body.Close()
 
 	// Build API Gateway response from standard HTTP response
 
@@ -77,7 +88,6 @@ func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPRes
 	if err != nil {
 		return
 	}
-	s.Body.Close()
 
 	res.StatusCode = s.StatusCode
 	res.IsBase64Encoded = true
@@ -106,7 +116,7 @@ func run() (exitCode int, err error) {
 
 	if !inLambda {
 		if verbose {
-			log.Print("not running in lambda - exec the command directly")
+			log.Print("not running in lambda, exec the command directly")
 		}
 		path, err := exec.LookPath(cmdName)
 		if err != nil {
