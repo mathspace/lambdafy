@@ -163,6 +163,7 @@ func main() {
 					fmt.Printf("image:%s\n", inf.image)
 					fmt.Printf("role:%s\n", inf.role)
 					fmt.Printf("active-version:%s\n", inf.activeVersion)
+					fmt.Printf("url:%s\n", inf.url)
 					fmt.Printf("last-modified:%s\n", inf.lastUpdated)
 					return nil
 				},

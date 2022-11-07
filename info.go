@@ -13,6 +13,7 @@ import (
 type fnInfo struct {
 	name          string
 	activeVersion string
+	url           string
 	image         string
 	lastUpdated   string
 	role          string
@@ -38,6 +39,14 @@ func info(fnName string) (fnInfo, error) {
 	if err == nil {
 		activeVersion = alias.FunctionVersion
 		inf.activeVersion = *activeVersion
+		fu, err := lambdaCl.GetFunctionUrlConfig(ctx, &lambda.GetFunctionUrlConfigInput{
+			FunctionName: &fnName,
+			Qualifier:    activeVersion,
+		})
+		if err != nil {
+			return inf, fmt.Errorf("failed to get function url: %s", err)
+		}
+		inf.url = *fu.FunctionUrl
 	}
 
 	gfo, err := lambdaCl.GetFunction(ctx, &lambda.GetFunctionInput{
