@@ -41,7 +41,7 @@ func info(fnName string) (fnInfo, error) {
 		inf.activeVersion = *activeVersion
 		fu, err := lambdaCl.GetFunctionUrlConfig(ctx, &lambda.GetFunctionUrlConfigInput{
 			FunctionName: &fnName,
-			Qualifier:    activeVersion,
+			Qualifier:    aws.String(activeAlias),
 		})
 		if err != nil {
 			return inf, fmt.Errorf("failed to get function url: %s", err)
