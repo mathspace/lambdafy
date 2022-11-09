@@ -30,6 +30,12 @@ var (
 	inLambda = os.Getenv("LAMBDA_TASK_ROOT") != ""
 	reqCount int32
 	started  = make(chan struct{})
+
+	client = &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 )
 
 // handler is the Lambda function handler
@@ -45,10 +51,14 @@ func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPRes
 
 	// Build standard HTTP request from the API Gateway request
 
-	var body io.Reader
-	body = strings.NewReader(req.Body)
+	body := req.Body
 	if req.IsBase64Encoded {
-		body = base64.NewDecoder(base64.StdEncoding, body)
+		var b []byte
+		b, err = base64.StdEncoding.DecodeString(body)
+		if err != nil {
+			return
+		}
+		body = string(b)
 	}
 
 	if req.RawPath == "" {
@@ -59,10 +69,11 @@ func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPRes
 	}
 	u, _ := url.Parse(fmt.Sprintf("http://%s%s%s", endpoint, req.RawPath, req.RawQueryString))
 
-	r, err := http.NewRequest(req.RequestContext.HTTP.Method, u.String(), body)
+	r, err := http.NewRequest(req.RequestContext.HTTP.Method, u.String(), strings.NewReader(body))
 	if err != nil {
 		return
 	}
+	r.Header.Add("Content-Length", strconv.Itoa(len(body)))
 	for k, v := range req.Headers {
 		if strings.ToLower(k) == "host" {
 			r.Host = v
@@ -75,7 +86,7 @@ func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPRes
 		log.Printf("proxied req #%d : %#v", reqNum, r)
 	}
 
-	s, err := http.DefaultClient.Do(r)
+	s, err := client.Do(r)
 	if err != nil {
 		return
 	}
@@ -88,19 +99,29 @@ func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPRes
 		return
 	}
 
+	if verbose {
+		log.Printf("proxied res #%d : %#v", reqNum, s)
+	}
+
 	res.StatusCode = s.StatusCode
 	res.IsBase64Encoded = true
 	res.Body = base64.StdEncoding.EncodeToString(resBody)
 	res.Headers = map[string]string{}
 	res.MultiValueHeaders = map[string][]string{}
 	for k, vs := range s.Header {
-		if len(vs) == 1 {
+		if strings.ToLower(k) == "set-cookie" {
+			res.Cookies = append(res.Cookies, vs...)
+		} else if len(vs) == 1 {
 			res.Headers[k] = vs[0]
 		} else {
 			for _, v := range vs {
 				res.MultiValueHeaders[k] = append(res.MultiValueHeaders[k], v)
 			}
 		}
+	}
+
+	if verbose {
+		log.Printf("outgoing res #%d : %#v", reqNum, res)
 	}
 
 	return
