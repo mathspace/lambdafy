@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -74,10 +76,18 @@ func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPRes
 		return
 	}
 	r.Header.Add("Content-Length", strconv.Itoa(len(body)))
+	gzipAllowed := false
 	for k, v := range req.Headers {
-		if strings.ToLower(k) == "host" {
+		k = strings.ToLower(k)
+		switch k {
+		case "host":
 			r.Host = v
-		} else {
+		case "accept-encoding":
+			// We do our own compression.
+			if strings.Contains(v, "gzip") {
+				gzipAllowed = true
+			}
+		default:
 			r.Header.Add(k, v)
 		}
 	}
@@ -103,11 +113,24 @@ func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPRes
 		log.Printf("proxied res #%d : %#v", reqNum, s)
 	}
 
+	res.Headers = map[string]string{}
+	res.MultiValueHeaders = map[string][]string{}
+
+	// We do our own compression if the client supports it and the upstream
+	// response is not already compressed.
+
+	if gzipAllowed && s.Header.Get("Content-Encoding") == "" {
+		gzBody := &bytes.Buffer{}
+		gw := gzip.NewWriter(gzBody)
+		_, _ = gw.Write(resBody)
+		_ = gw.Close()
+		resBody = gzBody.Bytes()
+		res.Headers["Content-Encoding"] = "gzip"
+	}
+
 	res.StatusCode = s.StatusCode
 	res.IsBase64Encoded = true
 	res.Body = base64.StdEncoding.EncodeToString(resBody)
-	res.Headers = map[string]string{}
-	res.MultiValueHeaders = map[string][]string{}
 	for k, vs := range s.Header {
 		if strings.ToLower(k) == "set-cookie" {
 			res.Cookies = append(res.Cookies, vs...)
