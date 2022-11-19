@@ -73,18 +73,29 @@ func main() {
 				Name:      "deploy",
 				Usage:     "deploy a specific version of a function to a public URL",
 				ArgsUsage: "function-name version",
+				Flags: []cli.Flag{
+					&cli.IntFlag{
+						Name:  "prime",
+						Usage: "prime the function by sending it concurrent requests",
+						Value: 1,
+					},
+				},
 				Action: func(c *cli.Context) error {
+					prime := c.Int("prime")
+					if prime < 1 || prime > 100 {
+						return fmt.Errorf("--prime must be between 1 and 100")
+					}
 					if c.NArg() != 2 {
 						return errors.New("must provide a function name and version as args")
 					}
 					fnName := c.Args().Get(0)
 					version := c.Args().Get(1)
 
-					fnURL, err := deploy(fnName, version)
+					fnURL, err := deploy(fnName, version, prime)
 					if err != nil {
 						return err
 					}
-					log.Printf("deployed function `%s` version `%s` to '%s'", fnName, version, fnURL)
+					log.Printf("deployed function '%s' version '%s' to '%s'", fnName, version, fnURL)
 					return nil
 				},
 			},

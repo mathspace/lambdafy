@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -97,7 +97,7 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 }
 
 // publish publishes the lambda function to AWS and returns the function URL.
-func deploy(fnName string, version string) (string, error) {
+func deploy(fnName string, version string, primeCount int) (string, error) {
 	ctx := context.Background()
 
 	// Setup clients
@@ -118,44 +118,13 @@ func deploy(fnName string, version string) (string, error) {
 		return "", err
 	}
 
-	// Loop until the funciton returns a 2XX/3XX response.
+	// Loop until the function returns a 2XX/3XX response.
 
-	log.Printf("waiting for '%s' to return success", preactiveFnURL)
+	log.Print("waiting for function to return success")
 
-	ctxDl, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-
-	var resp *http.Response
-	var req *http.Request
-	for {
-		req, err = http.NewRequestWithContext(ctxDl, http.MethodGet, preactiveFnURL, nil)
-		if err != nil {
-			return "", fmt.Errorf("failed to create request: %s", err)
-		}
-		resp, err = http.DefaultClient.Do(req)
-		if errors.Is(err, context.DeadlineExceeded) {
-			break
-		}
-		if err == nil && resp.StatusCode >= 200 && resp.StatusCode < 400 {
-			break
-		}
-		time.Sleep(time.Second)
+	if err := prime(preactiveFnURL, primeCount); err != nil {
+		return "", fmt.Errorf("function failed to return success - aborting deploy: %s", err)
 	}
-
-	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			if resp == nil {
-				return "", errors.New("timed out waiting for function to return success")
-			}
-			log.Print("timed out waiting for function to return success")
-		} else {
-			return "", fmt.Errorf("function check failed - aborting deploy: %s", err)
-		}
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
-		return "", fmt.Errorf("function check failed - aborting deploy: last status = %s", resp.Status)
-	}
-
 	// Prepare active deploy.
 
 	log.Printf("staging success - deploying to active endpoint")
@@ -188,5 +157,56 @@ func undeploy(fnName string) error {
 		return err
 	}
 
+	return nil
+}
+
+func prime(url string, num int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	wg := sync.WaitGroup{}
+	wg.Add(num)
+	errCh := make(chan error, num)
+
+	for i := 0; i < num; i++ {
+		go func() {
+			defer wg.Done()
+			conseqSuccess := 0
+			for {
+				req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+				if err != nil {
+					errCh <- fmt.Errorf("failed to create request: %s", err)
+					return
+				}
+				resp, err := http.DefaultClient.Do(req)
+				if err == context.Canceled || err == context.DeadlineExceeded {
+					return
+				}
+				if err == nil {
+					resp.Body.Close()
+				}
+				if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 400 {
+					conseqSuccess = 0
+					time.Sleep(500 * time.Millisecond)
+					continue
+				}
+				conseqSuccess++
+				if conseqSuccess == 3 {
+					return
+				}
+			}
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		cancel()
+	}()
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("timed out waiting for instances to warm up")
+		}
+	}
 	return nil
 }
