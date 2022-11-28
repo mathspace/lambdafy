@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/gobwas/glob"
 	"gopkg.in/yaml.v2"
@@ -76,6 +77,9 @@ func Load(r io.Reader) (*Spec, error) {
 			return nil, errors.New("invalid allowed_account_regions pattern")
 		}
 		s.allowedGlobs = append(s.allowedGlobs, g)
+	}
+	if !strings.Contains(s.Image, ":") {
+		s.Image += ":latest"
 	}
 	return &s, nil
 }

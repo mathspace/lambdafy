@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.17.2
 	github.com/docker/docker v20.10.21+incompatible
 	github.com/gobwas/glob v0.2.3
-	github.com/oxplot/starenv v0.7.0
+	github.com/oxplot/starenv v0.8.0
 	github.com/urfave/cli/v2 v2.23.5
 	gopkg.in/yaml.v2 v2.4.0
 )
