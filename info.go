@@ -15,6 +15,7 @@ type fnInfo struct {
 	activeVersion string
 	url           string
 	image         string
+	resolvedImage string
 	lastUpdated   string
 	role          string
 }
@@ -59,6 +60,7 @@ func info(fnName string) (fnInfo, error) {
 
 	inf.role = *gfo.Configuration.Role
 	inf.image = *gfo.Code.ImageUri
+	inf.resolvedImage = *gfo.Code.ResolvedImageUri
 	inf.lastUpdated = *gfo.Configuration.LastModified
 	return inf, nil
 }

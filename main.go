@@ -172,6 +172,7 @@ func main() {
 					}
 					fmt.Printf("name:%s\n", inf.name)
 					fmt.Printf("image:%s\n", inf.image)
+					fmt.Printf("resolved-image:%s\n", inf.resolvedImage)
 					fmt.Printf("role:%s\n", inf.role)
 					fmt.Printf("active-version:%s\n", inf.activeVersion)
 					fmt.Printf("url:%s\n", inf.url)
