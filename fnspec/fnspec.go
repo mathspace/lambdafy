@@ -5,11 +5,14 @@ import (
 	"errors"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/gobwas/glob"
 	"gopkg.in/yaml.v2"
 )
+
+var ecrRepoPat = regexp.MustCompile(`^\d+\.dkr\.ecr\.[^.]+\.amazonaws\.com/`)
 
 // EFSMount represents an AWS Elastic Filesystem mount.
 type EFSMount struct {
@@ -77,6 +80,9 @@ func Load(r io.Reader) (*Spec, error) {
 			return nil, errors.New("invalid allowed_account_regions pattern")
 		}
 		s.allowedGlobs = append(s.allowedGlobs, g)
+	}
+	if !ecrRepoPat.MatchString(s.Image) {
+		return nil, errors.New("image must be an ECR repository")
 	}
 	if !strings.Contains(s.Image, ":") {
 		s.Image += ":latest"
