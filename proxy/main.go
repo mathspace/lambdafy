@@ -43,6 +43,7 @@ var (
 // handler is the Lambda function handler
 func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPResponse, err error) {
 
+	// Once started channel is closed, this will unblock for all future requests.
 	<-started
 
 	reqNum := atomic.AddInt32(&reqCount, 1)
@@ -174,6 +175,7 @@ func run() (exitCode int, err error) {
 	args := os.Args[2:]
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Start listening for traffic as soon as possible, otherwise lambda will
 	// throw timeout errors.
@@ -219,7 +221,13 @@ func run() (exitCode int, err error) {
 	// Exit when the child process exits
 
 	go func() {
-		cmd.Wait()
+		if err := cmd.Wait(); err != nil {
+			if err, ok := err.(*exec.ExitError); ok {
+				log.Printf("command exited with code: %d", err.ExitCode())
+			} else {
+				log.Printf("error: waiting for command: %s", err)
+			}
+		}
 		cancel()
 	}()
 
@@ -242,25 +250,39 @@ func run() (exitCode int, err error) {
 			return http.ErrUseLastResponse
 		},
 	}
+
+	log.Printf("waiting for startup request to succeed")
+
 	for {
-		if _, err := waitClient.Get("http://" + endpoint); err == nil {
+		u := "http://" + endpoint + "/"
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return 1, fmt.Errorf("failed to create startup request: %s", err)
+		}
+		if resp, err := waitClient.Do(req); err == nil {
+			resp.Body.Close()
 			break
 		}
 		select {
 		case <-ctx.Done():
-			break
+			return 1, fmt.Errorf("startup request aborted due to cancelled context")
 		default:
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
 
+	log.Printf("startup request passed - proxying requests from now on")
+
 	// Unblock the request handler
 
 	close(started)
 
-	// Wait for lambda listener to stop
+	// Wait for lambda listener to stop (or the main context to be cancelled)
 
-	<-lambdaStopped
+	select {
+	case <-lambdaStopped:
+	case <-ctx.Done():
+	}
 
 	// Terminate child process when the proxy exits - usually due to error
 
