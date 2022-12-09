@@ -206,8 +206,6 @@ func run() (exitCode int, err error) {
 	}
 	env = append(env, fmt.Sprintf("PORT=%d", port))
 
-	// If running outside of lambda, simply replace the current process
-
 	cmd := exec.CommandContext(ctx, cmdName, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
