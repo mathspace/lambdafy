@@ -155,7 +155,6 @@ func run() (exitCode int, err error) {
 		return 127, fmt.Errorf("usage: %s command [arg [arg [...]]]", os.Args[0])
 	}
 	cmdName := os.Args[1]
-	args := os.Args[1:]
 
 	if !inLambda {
 		if verbose {
@@ -165,10 +164,14 @@ func run() (exitCode int, err error) {
 		if err != nil {
 			return 1, fmt.Errorf("cannot find command '%s': %w", cmdName, err)
 		}
+		// syscall.Exec requires the first argument to be the command name.
+		args := os.Args[1:]
 		err = syscall.Exec(path, args, os.Environ())
 		// If Exec succeeds, we'll never get here.
 		return 1, err
 	}
+
+	args := os.Args[2:]
 
 	ctx, cancel := context.WithCancel(context.Background())
 
