@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
@@ -53,6 +54,36 @@ func publish(specReader io.Reader) (res publishResult, err error) {
 		return res, fmt.Errorf("aws account and/or region is not allowed by spec")
 	}
 
+	// If VPC config is specified, ensure that at least one egress rule is specified.
+
+	if len(spec.VPCSecurityGroupIds) > 0 || len(spec.VPCSubnetIds) > 0 {
+		hasEgress := false
+		hasAllEgress := false
+
+		ec2Cl := ec2.NewFromConfig(acfg)
+		sgDetails, err := ec2Cl.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
+			GroupIds: spec.VPCSecurityGroupIds,
+		})
+		if err != nil {
+			return res, fmt.Errorf("failed to lookup security groups: %s", err)
+		}
+		for _, sg := range sgDetails.SecurityGroups {
+			for _, rule := range sg.IpPermissionsEgress {
+				hasEgress = true
+				if rule.IpProtocol != nil && *rule.IpProtocol == "-1" {
+					hasAllEgress = true
+				}
+			}
+		}
+
+		if !hasEgress {
+			return res, fmt.Errorf("VPC config is set in your spec, but no outbound/egress rules specified")
+		}
+		if !hasAllEgress {
+			log.Printf("warning: VPC config is set in your spec, but no outbound/egress rules allow all traffic - you need this to be able to send logs to Cloudwatch")
+		}
+	}
+
 	// Prepare to create/update lambda function
 
 	if len(spec.Entrypoint) > 0 && spec.Entrypoint[0] != "/lambdafy-proxy" {
@@ -72,11 +103,9 @@ func publish(specReader io.Reader) (res publishResult, err error) {
 	}
 
 	var vpc *lambdatypes.VpcConfig
-	if len(spec.VPCSubnetIds) > 0 || len(spec.VPCSecurityGroupIds) > 0 {
-		vpc = &lambdatypes.VpcConfig{
-			SubnetIds:        spec.VPCSubnetIds,
-			SecurityGroupIds: spec.VPCSecurityGroupIds,
-		}
+	vpc = &lambdatypes.VpcConfig{
+		SubnetIds:        spec.VPCSubnetIds,
+		SecurityGroupIds: spec.VPCSecurityGroupIds,
 	}
 
 	fsConfig := make([]lambdatypes.FileSystemConfig, len(spec.EFSMounts))
