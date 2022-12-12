@@ -19,7 +19,6 @@ image: nginx
 # Run `lambdafy example-role` to see terraform definition for a basic
 # role needed to run the lambda function.
 role: my-great-app-role
-
 # env defines the environmental variables available to the app. The
 # values follow the format for https://pkg.go.dev/github.com/oxplot/starenv
 # In short:
@@ -30,6 +29,7 @@ role: my-great-app-role
 # - All other values are treated as literals.
 #
 # env:
+#   LAMBDAFY_PROXY_LOGGING: verbose  # Turns on verbose logging of requests
 #   FOO: "bar"
 #   ABC: "123"
 #   LISTEN_ADDR: "0.0.0.0:@@LAMBDAFY_PORT@@"
