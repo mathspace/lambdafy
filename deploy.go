@@ -118,12 +118,20 @@ func deploy(fnName string, version string, primeCount int) (string, error) {
 		return "", err
 	}
 
-	// Loop until the function returns a 2XX/3XX response.
+	// Loop until the function returns a [234]XX response.
 
 	log.Print("waiting for function to return success")
 
+	errInst := fmt.Sprintf("Check staging endpoint '%s' and review logs by running 'lambdafy logs -s 15 -v %s %s'", preactiveFnURL, version, fnName)
+
+	// Run with 1 concurrency first to ensure function doesn't make debugging hard
+	// by producing too many log entries.
+	if err := prime(preactiveFnURL, 1); err != nil {
+		return "", fmt.Errorf("function failed to return success - aborting deploy: %s\n\n%s", err, errInst)
+	}
+
 	if err := prime(preactiveFnURL, primeCount); err != nil {
-		return "", fmt.Errorf("function failed to return success - aborting deploy: %s\n\nCheck staging endpoint '%s' and review lambda logs", err, preactiveFnURL)
+		return "", fmt.Errorf("function failed to return success - aborting deploy: %s\n\n%s", err, errInst)
 	}
 
 	// Prepare active deploy.
