@@ -123,8 +123,9 @@ func deploy(fnName string, version string, primeCount int) (string, error) {
 	log.Print("waiting for function to return success")
 
 	if err := prime(preactiveFnURL, primeCount); err != nil {
-		return "", fmt.Errorf("function failed to return success - aborting deploy: %s", err)
+		return "", fmt.Errorf("function failed to return success - aborting deploy: %s\n\nCheck staging endpoint '%s' and review lambda logs", err, preactiveFnURL)
 	}
+
 	// Prepare active deploy.
 
 	log.Printf("staging success - deploying to active endpoint")
@@ -183,7 +184,7 @@ func prime(url string, num int) error {
 				if err == nil {
 					resp.Body.Close()
 				}
-				if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 400 {
+				if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 500 {
 					conseqSuccess = 0
 					time.Sleep(500 * time.Millisecond)
 					continue
