@@ -24,12 +24,11 @@ import (
 	_ "github.com/oxplot/starenv/autoload"
 )
 
-const port = 19987
-
 var (
-	endpoint = "127.0.0.1:" + strconv.Itoa(port)
+	port     int    // port that proxy will proxy requests to
+	endpoint string // end point that proxy will proxy requests to
 	verbose  = os.Getenv("LAMBDAFY_PROXY_LOGGING") == "verbose"
-	inLambda = os.Getenv("LAMBDA_TASK_ROOT") != ""
+	inLambda = os.Getenv("_LAMBDA_SERVER_PORT") != "" && os.Getenv("AWS_LAMBDA_RUNTIME_API") != ""
 	reqCount int32
 	started  = make(chan struct{})
 
@@ -39,6 +38,13 @@ var (
 		},
 	}
 )
+
+func init() {
+	// Generate a random port number between 19000 and 19999.
+	// This is to ensure the user program can't depend on hardcoded port numbers.
+	port = 19000 + int(time.Now().UnixNano()%1000)
+	endpoint = "127.0.0.1:" + strconv.Itoa(port)
+}
 
 // handler is the Lambda function handler
 func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPResponse, err error) {
@@ -172,6 +178,8 @@ func run() (exitCode int, err error) {
 		return 1, err
 	}
 
+	log.Printf("running in lambda, starting proxying traffic to %s", endpoint)
+
 	args := os.Args[2:]
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -298,9 +306,10 @@ func run() (exitCode int, err error) {
 
 func main() {
 	log.SetFlags(0)
+	log.SetPrefix("lambdafy-proxy: ")
 	exitCode, err := run()
 	if err != nil {
-		log.Fatalf("lambdafy-proxy: error: %s", err)
+		log.Fatalf("error: %s", err)
 	}
 	os.Exit(exitCode)
 }
