@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"time"
 
 	_ "github.com/oxplot/starenv/autoload"
 	"github.com/urfave/cli/v2"
@@ -181,6 +182,68 @@ func main() {
 				},
 			},
 			{
+				Name:      "logs",
+				Aliases:   []string{"log"},
+				Usage:     "print out most recent logs for the function",
+				ArgsUsage: "function-name",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:        "version",
+						Aliases:     []string{"v"},
+						Usage:       "the version of the function to get logs for",
+						DefaultText: "latest",
+					},
+					&cli.BoolFlag{
+						Name:    "tail",
+						Aliases: []string{"t"},
+						Usage:   "wait for new logs and print them as they come in",
+					},
+					&cli.UintFlag{
+						Name:    "since",
+						Aliases: []string{"s"},
+						Usage:   "only print logs since this many minutes ago",
+						Value:   1,
+					},
+				},
+				Action: func(c *cli.Context) error {
+					if c.NArg() != 1 {
+						return errors.New("must provide a function name as the only arg")
+					}
+					since := time.Now().Add(-time.Duration(c.Uint("since")) * time.Minute)
+					fnName := c.Args().First()
+					version := c.String("version")
+					// If version is empty, get the latest version
+					if version == "" {
+						inf, err := info(fnName)
+						if err != nil {
+							return fmt.Errorf("failed to get function info: %s", err)
+						}
+						version = inf.activeVersion
+						if version == "" {
+							return fmt.Errorf("no active version found - manually specify version with --version")
+						}
+						log.Printf("printing logs for version %s", version)
+					}
+
+					var afterToken string
+					for {
+						lgs, err := logs(fnName, version, since, afterToken)
+						if err != nil {
+							return err
+						}
+						for _, l := range lgs.lines {
+							fmt.Println(l)
+						}
+						if !c.Bool("tail") {
+							return nil
+						}
+						afterToken = lgs.afterToken
+						since = time.Now().Add(-30 * time.Second)
+						time.Sleep(2 * time.Second)
+					}
+				},
+			},
+			{
 				Name:      "versions",
 				Aliases:   []string{"ver"},
 				Usage:     "list versions of a function",
@@ -222,6 +285,18 @@ func main() {
 				Usage: "example IAM role in terraform format to stdout",
 				Action: func(c *cli.Context) error {
 					fmt.Print(exampleRole)
+					return nil
+				},
+			},
+			{
+				Name:      "create-sample-project",
+				Usage:     "creates a sample project in the given directory",
+				ArgsUsage: "directory",
+				Action: func(c *cli.Context) error {
+					if c.NArg() != 1 {
+						return errors.New("must provide a directory as the only arg")
+					}
+					// TODO
 					return nil
 				},
 			},
