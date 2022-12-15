@@ -40,6 +40,7 @@ func main() {
 			logsCmd,
 			versionsCmd,
 			deleteCmd,
+			exampleSpecCmd,
 		},
 		EnableBashCompletion: true,
 		Suggest:              true,
