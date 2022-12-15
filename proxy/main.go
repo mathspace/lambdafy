@@ -28,7 +28,7 @@ var (
 	port     int    // port that proxy will proxy requests to
 	endpoint string // end point that proxy will proxy requests to
 	verbose  = os.Getenv("LAMBDAFY_PROXY_LOGGING") == "verbose"
-	inLambda = os.Getenv("_LAMBDA_SERVER_PORT") != "" && os.Getenv("AWS_LAMBDA_RUNTIME_API") != ""
+	inLambda = os.Getenv("AWS_LAMBDA_FUNCTION_VERSION") != "" && os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" && os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != ""
 	reqCount int32
 	started  = make(chan struct{})
 
