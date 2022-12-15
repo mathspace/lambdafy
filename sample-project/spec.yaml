@@ -1,0 +1,5 @@
+name: lambdafy-sample-project
+image: IMG
+role: lambdafy-sample-project
+memory: 512
+cpu: 1
