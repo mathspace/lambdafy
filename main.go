@@ -27,7 +27,7 @@ func main() {
 		Usage:       "Use any docker image as a lambda function",
 		Description: "If .env file exists, it will be used to populate env vars.",
 		Version:     version + " (" + commit + ")",
-		Copyright:   fmt.Sprintf("%d Mathspace Pty. Ltd.", time.Now().Year()),
+		Copyright:   fmt.Sprintf("%d Mathspace Pty. Ltd.", compiledDate.Year()),
 		Compiled:    compiledDate,
 		Commands: []*cli.Command{
 			createSampleProjectCmd,
