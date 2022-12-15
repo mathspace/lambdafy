@@ -21,10 +21,10 @@ var logsCmd = &cli.Command{
 	ArgsUsage: "function-name",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:        "version",
-			Aliases:     []string{"v"},
-			Usage:       "the version of the function to get logs for",
-			DefaultText: "latest",
+			Name:    "version",
+			Aliases: []string{"v"},
+			Usage:   "the version of the function to get logs for (active/latest or version number)",
+			Value:   "active",
 		},
 		&cli.BoolFlag{
 			Name:    "tail",
@@ -45,8 +45,12 @@ var logsCmd = &cli.Command{
 		since := time.Now().Add(-time.Duration(c.Uint("since")) * time.Minute)
 		fnName := c.Args().First()
 		version := c.String("version")
-		// If version is empty, get the latest version
 		if version == "" {
+			return fmt.Errorf("version must be specified - use 'active', 'latest' or a version number")
+		}
+
+		switch version {
+		case "active":
 			inf, err := info(fnName)
 			if err != nil {
 				return fmt.Errorf("failed to get function info: %s", err)
@@ -55,7 +59,17 @@ var logsCmd = &cli.Command{
 			if version == "" {
 				return fmt.Errorf("no active version found - manually specify version with --version")
 			}
-			log.Printf("printing logs for version %s", version)
+			log.Printf("printing logs for active version %s", version)
+		case "latest":
+			vers, err := versions(fnName)
+			if err != nil {
+				return fmt.Errorf("failed to get function versions: %s", err)
+			}
+			if len(vers) == 0 {
+				return fmt.Errorf("no versions found")
+			}
+			version = vers[len(vers)-1].version
+			log.Printf("printing logs for latest version %s", version)
 		}
 
 		var afterToken string
@@ -134,5 +148,4 @@ func logs(fnName string, version string, since time.Time, afterToken string) (fn
 	}
 
 	return lgs, nil
-
 }
