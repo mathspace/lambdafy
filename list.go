@@ -7,7 +7,24 @@ import (
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/urfave/cli/v2"
 )
+
+var listCmd = &cli.Command{
+	Name:    "list",
+	Aliases: []string{"ls"},
+	Usage:   "list functions",
+	Action: func(c *cli.Context) error {
+		fns, err := listFunctions()
+		if err != nil {
+			return err
+		}
+		for _, f := range fns {
+			fmt.Println(f)
+		}
+		return nil
+	},
+}
 
 // listFunctions lists all lambdafy functions.
 func listFunctions() ([]string, error) {

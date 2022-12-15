@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,10 +14,66 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/urfave/cli/v2"
 )
 
 const activeAlias = "lambdafy-active"
 const preactiveAlias = "lambdafy-preactive"
+
+var deployCmd = &cli.Command{
+	Name:      "deploy",
+	Usage:     "deploy a specific version of a function to a public URL",
+	ArgsUsage: "function-name version",
+	Flags: []cli.Flag{
+		&cli.IntFlag{
+			Name:  "prime",
+			Usage: "prime the function by sending it concurrent requests",
+			Value: 1,
+		},
+	},
+	Action: func(c *cli.Context) error {
+		prime := c.Int("prime")
+		if prime < 1 || prime > 100 {
+			return fmt.Errorf("--prime must be between 1 and 100")
+		}
+		if c.NArg() != 2 {
+			return errors.New("must provide a function name and version as args")
+		}
+		fnName := c.Args().Get(0)
+		version := c.Args().Get(1)
+
+		fnURL, err := deploy(fnName, version, prime)
+		if err != nil {
+			return err
+		}
+		log.Printf("deployed function '%s' version '%s' to '%s'", fnName, version, fnURL)
+		return nil
+	},
+}
+
+var undeployCmd = &cli.Command{
+	Name:      "undeploy",
+	Usage:     "remove deployment and make function inaccessible",
+	ArgsUsage: "function-name",
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "yes",
+			Usage: "Actually undeploy the function",
+		},
+	},
+	Action: func(c *cli.Context) error {
+		if c.NArg() != 1 {
+			return errors.New("must provide a function name as the only arg")
+		}
+		if !c.Bool("yes") {
+			return errors.New("must pass --yes to actually undeploy the function")
+		}
+		if err := undeploy(c.Args().First()); err != nil {
+			return err
+		}
+		return nil
+	},
+}
 
 func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, version string, alias string) (string, error) {
 

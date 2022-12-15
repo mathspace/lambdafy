@@ -2,13 +2,39 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/urfave/cli/v2"
 )
+
+var infoCmd = &cli.Command{
+	Name:      "info",
+	Aliases:   []string{"i"},
+	Usage:     "print out info about a function",
+	ArgsUsage: "function-name",
+	Action: func(c *cli.Context) error {
+		if c.NArg() != 1 {
+			return errors.New("must provide a function name as the only arg")
+		}
+		inf, err := info(c.Args().First())
+		if err != nil {
+			return err
+		}
+		fmt.Printf("name:%s\n", inf.name)
+		fmt.Printf("image:%s\n", inf.image)
+		fmt.Printf("resolved-image:%s\n", inf.resolvedImage)
+		fmt.Printf("role:%s\n", inf.role)
+		fmt.Printf("active-version:%s\n", inf.activeVersion)
+		fmt.Printf("url:%s\n", inf.url)
+		fmt.Printf("last-modified:%s\n", inf.lastUpdated)
+		return nil
+	},
+}
 
 type fnInfo struct {
 	name          string

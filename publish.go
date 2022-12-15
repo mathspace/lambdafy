@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -15,9 +17,41 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/urfave/cli/v2"
 
 	"github.com/mathspace/lambdafy/fnspec"
 )
+
+var publishCmd = &cli.Command{
+	Name:        "publish",
+	Usage:       "publish a new version of a function without routing traffic to it",
+	ArgsUsage:   "spec-file",
+	Description: "Use '-' as spec-file to read from stdin.",
+	Action: func(c *cli.Context) error {
+		if c.NArg() != 1 {
+			return errors.New("must provide a spec file as the only arg")
+		}
+		p := c.Args().First()
+		var r io.Reader
+		if p == "-" {
+			r = os.Stdin
+		} else {
+			f, err := os.Open(p)
+			if err != nil {
+				return fmt.Errorf("failed to open spec file: %s", err)
+			}
+			defer f.Close()
+			r = f
+		}
+		out, err := publish(r)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("function-name:%s\n", out.name)
+		fmt.Printf("published-version:%s\n", out.version)
+		return nil
+	},
+}
 
 // publishResult holds the results of a publish operation.
 type publishResult struct {
