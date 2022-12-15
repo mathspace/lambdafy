@@ -10,15 +10,15 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-// Populated at build time by -X ldflag
+// These will be populated by goreleaser.
 var (
-	Version      = "dev"
-	Commit       = "HEAD"
-	CompiledDate = "1970-01-01T00:00:00Z"
+	version = "dev"
+	commit  = "HEAD"
+	date    = "1970-01-01T00:00:00Z"
 )
 
 func main() {
-	compiledDate, err := time.Parse(time.RFC3339, CompiledDate)
+	compiledDate, err := time.Parse(time.RFC3339, date)
 	if err != nil {
 		panic(err)
 	}
@@ -26,7 +26,7 @@ func main() {
 		Name:        "lambdafy",
 		Usage:       "Use any docker image as a lambda function",
 		Description: "If .env file exists, it will be used to populate env vars.",
-		Version:     Version + " (" + Commit + ")",
+		Version:     version + " (" + commit + ")",
 		Copyright:   fmt.Sprintf("%d Mathspace Pty. Ltd.", time.Now().Year()),
 		Compiled:    compiledDate,
 		Commands: []*cli.Command{
