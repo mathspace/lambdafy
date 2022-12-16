@@ -84,6 +84,10 @@ func info(fnName string) (fnInfo, error) {
 		return inf, err
 	}
 
+	if gfo.Code.ImageUri == nil {
+		return inf, fmt.Errorf("function %s is not an docker image function", fnName)
+	}
+
 	inf.role = *gfo.Configuration.Role
 	inf.image = *gfo.Code.ImageUri
 	inf.resolvedImage = *gfo.Code.ResolvedImageUri

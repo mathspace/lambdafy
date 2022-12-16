@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -59,6 +60,8 @@ type publishResult struct {
 	name    string
 	version string
 }
+
+var roleArnPat = regexp.MustCompile(`^arn:aws:iam::\d+:role/.+`)
 
 // publish publishes the lambda function to AWS.
 func publish(specReader io.Reader) (res publishResult, err error) {
@@ -124,10 +127,19 @@ func publish(specReader io.Reader) (res publishResult, err error) {
 		spec.Entrypoint = append([]string{"/lambdafy-proxy"}, spec.Entrypoint...)
 	}
 
-	iamCl := iam.NewFromConfig(acfg)
-	role, err := iamCl.GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(spec.Role)})
-	if err != nil {
-		return res, fmt.Errorf("failed to lookup role '%s': %s", spec.Role, err)
+	var roleArn string
+
+	if roleArnPat.MatchString(spec.Role) {
+		roleArn = spec.Role
+	} else {
+
+		iamCl := iam.NewFromConfig(acfg)
+		role, err := iamCl.GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(spec.Role)})
+		if err != nil {
+			return res, fmt.Errorf("failed to lookup role '%s': %s", spec.Role, err)
+		}
+		roleArn = *role.Role.Arn
+
 	}
 
 	tags := make(map[string]string, len(spec.Tags))
@@ -164,7 +176,7 @@ func publish(specReader io.Reader) (res publishResult, err error) {
 		r, err := lambdaCl.CreateFunction(ctx, &lambda.CreateFunctionInput{
 			FunctionName:  aws.String(spec.Name),
 			Description:   aws.String(spec.Description),
-			Role:          role.Role.Arn,
+			Role:          &roleArn,
 			Architectures: []lambdatypes.Architecture{lambdatypes.ArchitectureX8664},
 			Environment:   &lambdatypes.Environment{Variables: spec.Env},
 			Code: &lambdatypes.FunctionCode{
@@ -199,7 +211,7 @@ func publish(specReader io.Reader) (res publishResult, err error) {
 			_, err := lambdaCl.UpdateFunctionConfiguration(ctx, &lambda.UpdateFunctionConfigurationInput{
 				FunctionName: aws.String(spec.Name),
 				Description:  aws.String(spec.Description),
-				Role:         role.Role.Arn,
+				Role:         &roleArn,
 				Environment:  &lambdatypes.Environment{Variables: spec.Env},
 				ImageConfig: &lambdatypes.ImageConfig{
 					EntryPoint:       spec.Entrypoint,

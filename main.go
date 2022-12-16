@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	_ "github.com/oxplot/starenv/autoload"
@@ -16,6 +17,45 @@ var (
 	commit  = "HEAD"
 	date    = "1970-01-01T00:00:00Z"
 )
+
+// resolveVersion resolves the given version spec to an actual version. If a
+// numerical version is provided, it will be returned as is. If the version is
+// "active", the acitve version will be returned. If the version is "latest",
+// the latest version will be returned.
+func resolveVersion(fnName string, verSpec string) (string, error) {
+	switch verSpec {
+	case "active":
+		inf, err := info(fnName)
+		if err != nil {
+			return "", fmt.Errorf("failed to get function info: %s", err)
+		}
+		verSpec = inf.activeVersion
+		if verSpec == "" {
+			return "", fmt.Errorf("no active version found")
+		}
+	case "latest":
+		vers, err := versions(fnName)
+		if err != nil {
+			return "", fmt.Errorf("failed to get function versions: %s", err)
+		}
+		if len(vers) == 0 {
+			return "", fmt.Errorf("no versions found")
+		}
+		verSpec = vers[len(vers)-1].version
+	default:
+		if _, err := strconv.Atoi(verSpec); err != nil {
+			return "", fmt.Errorf("invalid version spec: %s", verSpec)
+		}
+	}
+	return verSpec, nil
+}
+
+var versionFlag = &cli.StringFlag{
+	Name:    "version",
+	Aliases: []string{"v"},
+	Usage:   "the version of the function (active/latest or version number)",
+	Value:   "active",
+}
 
 func main() {
 	compiledDate, err := time.Parse(time.RFC3339, date)
@@ -37,6 +77,7 @@ func main() {
 			undeployCmd,
 			listCmd,
 			infoCmd,
+			specCmd,
 			logsCmd,
 			versionsCmd,
 			deleteCmd,

@@ -23,21 +23,21 @@ type EFSMount struct {
 // Spec is the specification of a lambda function.
 type Spec struct {
 	Name                  string            `yaml:"name"`
-	Description           string            `yaml:"description"`
+	Description           string            `yaml:"description,omitempty"`
 	Image                 string            `yaml:"image"`
 	Role                  string            `yaml:"role"`
-	Env                   map[string]string `yaml:"env"`
-	Entrypoint            []string          `yaml:"entrypoint"`
-	Command               []string          `yaml:"command"`
-	WorkDir               *string           `yaml:"workdir"`
-	Memory                *int32            `yaml:"memory"`
-	Timeout               *int32            `yaml:"timeout"`
-	Tags                  map[string]string `yaml:"tags"`
-	VPCSecurityGroupIds   []string          `yaml:"vpc_security_group_ids"`
-	VPCSubnetIds          []string          `yaml:"vpc_subnet_ids"`
-	EFSMounts             []EFSMount        `yaml:"efs_mounts"`
-	TempSize              *int32            `yaml:"temp_size"`
-	AllowedAccountRegions []string          `yaml:"allowed_account_regions"`
+	Env                   map[string]string `yaml:"env,omitempty"`
+	Entrypoint            []string          `yaml:"entrypoint,omitempty"`
+	Command               []string          `yaml:"command,omitempty"`
+	WorkDir               *string           `yaml:"workdir,omitempty"`
+	Memory                *int32            `yaml:"memory,omitempty"`
+	Timeout               *int32            `yaml:"timeout,omitempty"`
+	Tags                  map[string]string `yaml:"tags,omitempty"`
+	VPCSecurityGroupIds   []string          `yaml:"vpc_security_group_ids,omitempty"`
+	VPCSubnetIds          []string          `yaml:"vpc_subnet_ids,omitempty"`
+	EFSMounts             []EFSMount        `yaml:"efs_mounts,omitempty"`
+	TempSize              *int32            `yaml:"temp_size,omitempty"`
+	AllowedAccountRegions []string          `yaml:"allowed_account_regions,omitempty"`
 	allowedGlobs          []glob.Glob       `yaml:"-"`
 }
 
@@ -88,6 +88,11 @@ func Load(r io.Reader) (*Spec, error) {
 		s.Image += ":latest"
 	}
 	return &s, nil
+}
+
+// Save saves the spec to the given writer.
+func (a *Spec) Save(w io.Writer) error {
+	return yaml.NewEncoder(w).Encode(a)
 }
 
 // LoadFromFile loads the spec from the given path.

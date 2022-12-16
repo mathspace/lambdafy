@@ -44,33 +44,12 @@ var logsCmd = &cli.Command{
 		}
 		since := time.Now().Add(-time.Duration(c.Uint("since")) * time.Minute)
 		fnName := c.Args().First()
-		version := c.String("version")
-		if version == "" {
-			return fmt.Errorf("version must be specified - use 'active', 'latest' or a version number")
+		version, err := resolveVersion(fnName, c.String("version"))
+		if err != nil {
+			return fmt.Errorf("failed to resolve version: %s", err)
 		}
 
-		switch version {
-		case "active":
-			inf, err := info(fnName)
-			if err != nil {
-				return fmt.Errorf("failed to get function info: %s", err)
-			}
-			version = inf.activeVersion
-			if version == "" {
-				return fmt.Errorf("no active version found - manually specify version with --version")
-			}
-			log.Printf("printing logs for active version %s", version)
-		case "latest":
-			vers, err := versions(fnName)
-			if err != nil {
-				return fmt.Errorf("failed to get function versions: %s", err)
-			}
-			if len(vers) == 0 {
-				return fmt.Errorf("no versions found")
-			}
-			version = vers[len(vers)-1].version
-			log.Printf("printing logs for latest version %s", version)
-		}
+		log.Printf("printing logs for version %s", version)
 
 		var afterToken string
 		for {
