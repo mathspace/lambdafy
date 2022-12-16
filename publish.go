@@ -25,6 +25,7 @@ import (
 
 var publishCmd = &cli.Command{
 	Name:        "publish",
+	Aliases:     []string{"pub"},
 	Usage:       "publish a new version of a function without routing traffic to it",
 	ArgsUsage:   "spec-file",
 	Description: "Use '-' as spec-file to read from stdin.",

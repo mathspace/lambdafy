@@ -94,7 +94,8 @@ echo "=> Done!"
 
 echo
 echo -n "* Visit at "
-AWS_DEFAULT_REGION="$_region" lambdafy info lambdafy-sample-project | sed -n 's/^url:\(.*\)/\1/p'
+AWS_DEFAULT_REGION="$_region" lambdafy info -k url lambdafy-sample-project
 
 echo '* To view live logs, run `lambdafy logs --tail lambdafy-sample-project`'
 echo '* To delete the function, run `lambdafy delete lambdafy-sample-project`'
+echo '* You will need to manually delete the other resources (IAM Role, ECR Repo)'

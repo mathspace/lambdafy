@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/urfave/cli/v2"
@@ -14,40 +15,54 @@ import (
 
 var infoCmd = &cli.Command{
 	Name:      "info",
-	Aliases:   []string{"i"},
 	Usage:     "print out info about a function",
 	ArgsUsage: "function-name",
+	Flags: []cli.Flag{
+		versionFlag,
+		&cli.StringFlag{
+			Name:    "key",
+			Aliases: []string{"k"},
+			Usage:   "key to print the value of",
+		},
+	},
 	Action: func(c *cli.Context) error {
-		if c.NArg() != 1 {
+		fnName := c.Args().First()
+		fnVer := c.String("version")
+		if c.NArg() != 1 || fnName == "" {
 			return errors.New("must provide a function name as the only arg")
 		}
-		inf, err := info(c.Args().First())
+		if fnVer == "" {
+			return errors.New("must provide a version")
+		}
+		inf, err := info(fnName, fnVer)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("name:%s\n", inf.name)
-		fmt.Printf("image:%s\n", inf.image)
-		fmt.Printf("resolved-image:%s\n", inf.resolvedImage)
-		fmt.Printf("role:%s\n", inf.role)
-		fmt.Printf("active-version:%s\n", inf.activeVersion)
-		fmt.Printf("url:%s\n", inf.url)
-		fmt.Printf("last-modified:%s\n", inf.lastUpdated)
+		k := c.String("key")
+		if k != "" {
+			v, ok := inf[k]
+			if !ok {
+				return fmt.Errorf("key '%s' not found", k)
+			}
+			fmt.Println(v)
+			return nil
+		}
+		sortedKeys := make([]string, 0, len(inf))
+		for k := range inf {
+			sortedKeys = append(sortedKeys, k)
+		}
+		sort.Strings(sortedKeys)
+		for _, k := range sortedKeys {
+			fmt.Printf("%s=%s\n", k, inf[k])
+		}
 		return nil
 	},
 }
 
-type fnInfo struct {
-	name          string
-	activeVersion string
-	url           string
-	image         string
-	resolvedImage string
-	lastUpdated   string
-	role          string
-}
-
-func info(fnName string) (fnInfo, error) {
-	inf := fnInfo{name: fnName}
+func info(fnName string, fnVer string) (map[string]string, error) {
+	inf := map[string]string{
+		"name": fnName,
+	}
 	ctx := context.Background()
 	acfg, err := awsconfig.LoadDefaultConfig(ctx)
 	if err != nil {
@@ -55,30 +70,43 @@ func info(fnName string) (fnInfo, error) {
 	}
 	lambdaCl := lambda.NewFromConfig(acfg)
 
-	alias, err := lambdaCl.GetAlias(ctx, &lambda.GetAliasInput{
-		FunctionName: &fnName,
-		Name:         aws.String(activeAlias),
-	})
-	if err != nil && !strings.Contains(err.Error(), "404") {
-		return inf, fmt.Errorf("failed to get active function alias: %s", err)
-	}
-	var activeVersion *string
-	if err == nil {
-		activeVersion = alias.FunctionVersion
-		inf.activeVersion = *activeVersion
-		fu, err := lambdaCl.GetFunctionUrlConfig(ctx, &lambda.GetFunctionUrlConfigInput{
-			FunctionName: &fnName,
-			Qualifier:    aws.String(activeAlias),
-		})
+	// We kind of re-implement the login of versionFlag here, but it's necessary
+	// because there are minor differences and we also need to get more details
+	// out of the function alias.
+
+	if fnVer == latestPseudoVersion {
+		fnVer = "latest"
+		vers, err := versions(fnName)
 		if err != nil {
-			return inf, fmt.Errorf("failed to get function url: %s", err)
+			return inf, fmt.Errorf("failed to get versions: %s", err)
 		}
-		inf.url = *fu.FunctionUrl
+		fnVer = strconv.Itoa(vers[len(vers)-1].version)
+
+	} else if _, err := strconv.Atoi(fnVer); err != nil { // not a number
+		alias, err := lambdaCl.GetAlias(ctx, &lambda.GetAliasInput{
+			FunctionName: &fnName,
+			Name:         &fnVer,
+		})
+		if err != nil && !strings.Contains(err.Error(), "404") {
+			return inf, fmt.Errorf("failed to lookup function alias: %s", err)
+		}
+
+		if err == nil {
+			inf["version"] = *alias.FunctionVersion
+			fu, err := lambdaCl.GetFunctionUrlConfig(ctx, &lambda.GetFunctionUrlConfigInput{
+				FunctionName: &fnName,
+				Qualifier:    &fnVer,
+			})
+			if err != nil {
+				return inf, fmt.Errorf("failed to get function url: %s", err)
+			}
+			inf["url"] = *fu.FunctionUrl
+		}
 	}
 
 	gfo, err := lambdaCl.GetFunction(ctx, &lambda.GetFunctionInput{
 		FunctionName: &fnName,
-		Qualifier:    activeVersion,
+		Qualifier:    &fnVer,
 	})
 	if err != nil {
 		return inf, err
@@ -88,9 +116,10 @@ func info(fnName string) (fnInfo, error) {
 		return inf, fmt.Errorf("function %s is not an docker image function", fnName)
 	}
 
-	inf.role = *gfo.Configuration.Role
-	inf.image = *gfo.Code.ImageUri
-	inf.resolvedImage = *gfo.Code.ResolvedImageUri
-	inf.lastUpdated = *gfo.Configuration.LastModified
+	inf["version"] = *gfo.Configuration.Version
+	inf["image"] = *gfo.Code.ImageUri
+	inf["resolved-image"] = *gfo.Code.ResolvedImageUri
+	inf["role"] = *gfo.Configuration.Role
+	inf["timestamp"] = *gfo.Configuration.LastModified
 	return inf, nil
 }

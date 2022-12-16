@@ -4,7 +4,6 @@ package fnspec
 import (
 	"errors"
 	"io"
-	"os"
 	"regexp"
 	"strings"
 
@@ -93,14 +92,4 @@ func Load(r io.Reader) (*Spec, error) {
 // Save saves the spec to the given writer.
 func (a *Spec) Save(w io.Writer) error {
 	return yaml.NewEncoder(w).Encode(a)
-}
-
-// LoadFromFile loads the spec from the given path.
-func LoadFromFile(path string) (*Spec, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	return Load(f)
 }

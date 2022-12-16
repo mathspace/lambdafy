@@ -44,16 +44,16 @@ var logsCmd = &cli.Command{
 		}
 		since := time.Now().Add(-time.Duration(c.Uint("since")) * time.Minute)
 		fnName := c.Args().First()
-		version, err := resolveVersion(fnName, c.String("version"))
+		ver, err := resolveVersion(fnName, c.String("version"))
 		if err != nil {
 			return fmt.Errorf("failed to resolve version: %s", err)
 		}
 
-		log.Printf("printing logs for version %s", version)
+		log.Printf("printing logs for version %s", ver)
 
 		var afterToken string
 		for {
-			lgs, err := logs(fnName, version, since, afterToken)
+			lgs, err := logs(fnName, ver, since, afterToken)
 			if err != nil {
 				return err
 			}
@@ -78,11 +78,10 @@ type fnLogs struct {
 }
 
 // logs returns the logs for a function at the specified version.
-// If version is empty, last active version of the function is assumed.
 // afterToken is a token to pass to get more recent logs.
 // This log retriever is super primitive, thanks to the complexities of AWS.
 // It basically pulls the last 60s of the logs.
-func logs(fnName string, version string, since time.Time, afterToken string) (fnLogs, error) {
+func logs(fnName string, version int, since time.Time, afterToken string) (fnLogs, error) {
 	lgs := fnLogs{}
 	ctx := context.Background()
 	acfg, err := awsconfig.LoadDefaultConfig(ctx)
@@ -100,7 +99,7 @@ func logs(fnName string, version string, since time.Time, afterToken string) (fn
 	prefixDate := since.UTC().AddDate(0, 0, -(maxDays - 1))
 
 	for i := 0; i < maxDays; i++ {
-		streamPrefix := fmt.Sprintf("%s/[%s]", prefixDate.Format("2006/01/02"), version)
+		streamPrefix := fmt.Sprintf("%s/[%d]", prefixDate.Format("2006/01/02"), version)
 		pgr := cloudwatchlogs.NewFilterLogEventsPaginator(logsCl, &cloudwatchlogs.FilterLogEventsInput{
 			LogGroupName:        logGroupName,
 			StartTime:           aws.Int64(since.UnixMilli()),
