@@ -20,12 +20,7 @@ var logsCmd = &cli.Command{
 	Usage:     "print out most recent logs for the function",
 	ArgsUsage: "function-name",
 	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name:    "version",
-			Aliases: []string{"v"},
-			Usage:   "the version of the function to get logs for (active/latest or version number)",
-			Value:   "active",
-		},
+		versionFlag,
 		&cli.BoolFlag{
 			Name:    "tail",
 			Aliases: []string{"t"},
@@ -49,7 +44,7 @@ var logsCmd = &cli.Command{
 			return fmt.Errorf("failed to resolve version: %s", err)
 		}
 
-		log.Printf("printing logs for version %s", ver)
+		log.Printf("printing logs for version %d", ver)
 
 		var afterToken string
 		for {
