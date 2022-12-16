@@ -1,5 +1,2 @@
-FROM python
-
-COPY . /html
-WORKDIR /html
-CMD echo cli-port=@@LAMBDAFY_PORT@@ ; echo port=$PORT ; python -m http.server $PORT
+FROM busybox
+CMD nc -lk -p $PORT -e echo $'HTTP/1.1 200 OK\r\nContent-Length:18\r\n\r\nHi from lambdafy!'
