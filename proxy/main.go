@@ -195,23 +195,15 @@ func run() (exitCode int, err error) {
 		lambda.StartWithContext(ctx, handler)
 	}()
 
-	portStr := strconv.Itoa(port)
-
-	// Replace @@LAMBDAFY_PORT@@ in all arguments
-
-	for i, a := range args {
-		args[i] = strings.ReplaceAll(a, "@@LAMBDAFY_PORT@@", portStr)
-	}
-
-	// Duplicate own env and add PORT to it, replacing all occurrences of
-	// @@LAMBDAFY_PORT@@
+	// Duplicate own env and add PORT to it.
 
 	env := make([]string, 0, len(os.Environ())+1)
 	for _, v := range os.Environ() {
 		if strings.HasPrefix(v, "PORT=") {
+			// Under lambda, the only valid port is the one set by us, so ignore
+			// external one.
 			continue
 		}
-		v = strings.ReplaceAll(v, "@@LAMBDAFY_PORT@@", portStr)
 		env = append(env, v)
 	}
 	env = append(env, fmt.Sprintf("PORT=%d", port))

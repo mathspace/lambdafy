@@ -23,22 +23,17 @@ role: my-great-app-role
 # values follow the format for https://pkg.go.dev/github.com/oxplot/starenv
 # In short:
 # - Values starting with asterisk (*) are treated specially.
-# - Special token "@@LAMBDAFY_PORT@@" is replaced with the port that the
-#   application is expected to be listening on. This is the same value as
-#   available in PORT env var as set by the proxy.
 # - All other values are treated as literals.
 #
 # env:
 #   LAMBDAFY_PROXY_LOGGING: verbose  # Turns on verbose logging of requests
 #   FOO: "bar"
 #   ABC: "123"
-#   LISTEN_ADDR: "0.0.0.0:@@LAMBDAFY_PORT@@"
 #   API_KEY: "*ssm:/my-great-app/key"
 #   CONFIG: "*s3:app-bucket/path/to/config"
 
 # entrypoint is analogous to Dockerfile ENTRYPOINT directive. Specifying
 # it will override the existing ENTRYPOINT in the docker image.
-# NOTE: @@LAMBDAFY_PORT@@ is replaced in entrypoint and command as well.
 #
 # entrypoint:
 #   - /bin/sh

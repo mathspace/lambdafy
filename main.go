@@ -82,6 +82,7 @@ func main() {
 			versionsCmd,
 			deleteCmd,
 			exampleSpecCmd,
+			exampleRoleCmd,
 		},
 		EnableBashCompletion: true,
 		Suggest:              true,

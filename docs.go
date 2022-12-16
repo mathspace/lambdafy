@@ -18,6 +18,9 @@ var (
 	//go:embed example-spec.yaml
 	exampleSpec string
 
+	//go:embed example-role.tf
+	exampleRole string
+
 	//go:embed sample-project
 	sampleProject embed.FS
 )
@@ -27,6 +30,15 @@ var exampleSpecCmd = &cli.Command{
 	Usage: "prints an example spec with extensive comments to stdout",
 	Action: func(c *cli.Context) error {
 		fmt.Print(exampleSpec)
+		return nil
+	},
+}
+
+var exampleRoleCmd = &cli.Command{
+	Name:  "example-role",
+	Usage: "prints an example IAM role in terraform format to stdout",
+	Action: func(c *cli.Context) error {
+		fmt.Print(exampleRole)
 		return nil
 	},
 }
