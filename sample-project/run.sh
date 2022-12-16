@@ -43,7 +43,7 @@ aws ecr create-repository --repository-name $_repo_name > "$_out" 2> "$_err" || 
 
 echo "=> Login to ECR" >&2
 
-eval "$(aws ecr get-login | sed 's/ -e none//')"
+eval "$(aws --region "$_region" ecr get-login | sed 's/ -e none//')"
 
 echo "=> Build the docker image" >&2
 
@@ -84,17 +84,17 @@ aws iam attach-role-policy --role-name "$_role_name" --policy-arn arn:aws:iam::a
 
 echo "=> Publish a new version of the function (create if needed)" >&2
 
-sed "s|IMG|$_repo_uri|" spec.yaml | lambdafy publish - > "$_out"
+sed "s|IMG|$_repo_uri|" spec.yaml | AWS_DEFAULT_REGION="$_region" lambdafy publish - > "$_out"
 
 echo "=> Deploy the function" >&2
 
-lambdafy deploy lambdafy-sample-project "$(grep -i version "$_out" | cut -d: -f2)"
+AWS_DEFAULT_REGION="$_region" lambdafy deploy lambdafy-sample-project "$(grep -i version "$_out" | cut -d: -f2)"
 
 echo "=> Done!"
 
 echo
 echo -n "* Visit at "
-lambdafy info lambdafy-sample-project | sed -n 's/^url:\(.*\)/\1/p'
+AWS_DEFAULT_REGION="$_region" lambdafy info lambdafy-sample-project | sed -n 's/^url:\(.*\)/\1/p'
 
 echo '* To view live logs, run `lambdafy logs --tail lambdafy-sample-project`'
 echo '* To delete the function, run `lambdafy delete lambdafy-sample-project`'
