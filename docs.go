@@ -2,14 +2,13 @@ package main
 
 import (
 	"embed"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 
-	"github.com/urfave/cli/v2"
+	"github.com/spf13/cobra"
 )
 
 const sampleProjectDir = "sample-project"
@@ -25,33 +24,31 @@ var (
 	sampleProject embed.FS
 )
 
-var exampleSpecCmd = &cli.Command{
-	Name:  "example-spec",
-	Usage: "prints an example spec with extensive comments to stdout",
-	Action: func(c *cli.Context) error {
+var exampleSpecCmd = &cobra.Command{
+	Use:   "example-spec",
+	Short: "Prints an example spec with extensive comments to stdout",
+	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Print(exampleSpec)
 		return nil
 	},
 }
 
-var exampleRoleCmd = &cli.Command{
-	Name:  "example-role",
-	Usage: "prints an example IAM role in terraform format to stdout",
-	Action: func(c *cli.Context) error {
+var exampleRoleCmd = &cobra.Command{
+	Use:   "example-role",
+	Short: "Prints an example IAM role in terraform format to stdout",
+	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Print(exampleRole)
 		return nil
 	},
 }
 
-var createSampleProjectCmd = &cli.Command{
-	Name:      "create-sample-project",
-	Usage:     "creates a sample project in the given directory",
-	ArgsUsage: "output-dir",
-	Action: func(c *cli.Context) error {
-		outDir := c.Args().Get(0)
-		if c.NArg() != 1 || outDir == "" {
-			return errors.New("must provide a directory as the only arg")
-		}
+var createSampleProjectCmd = &cobra.Command{
+	Use:   "create-sample-project output-dir",
+	Short: "Creates a sample project in the given directory",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+
+		outDir := args[0]
 
 		// Create the output directory if it doesn't exist
 

@@ -14,7 +14,7 @@ import (
 
 	dockertypes "github.com/docker/docker/api/types"
 	dockerclient "github.com/docker/docker/client"
-	"github.com/urfave/cli/v2"
+	"github.com/spf13/cobra"
 )
 
 //go:generate sh -c "cd proxy ; CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w' -o ../proxy-linux-amd64"
@@ -22,15 +22,12 @@ import (
 //go:embed proxy-linux-amd64
 var proxyBinary []byte
 
-var makeCmd = &cli.Command{
-	Name:      "make",
-	Usage:     "modify the image by adding lambdafy proxy to it",
-	ArgsUsage: "image-name",
-	Action: func(c *cli.Context) error {
-		if c.NArg() != 1 {
-			return fmt.Errorf("must provide a docker image name as the only arg")
-		}
-		return lambdafyImage(c.Args().First())
+var makeCmd = &cobra.Command{
+	Use:   "make image-name",
+	Short: "Modify the image by adding lambdafy proxy to it",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(c *cobra.Command, args []string) error {
+		return lambdafyImage(args[0])
 	},
 }
 

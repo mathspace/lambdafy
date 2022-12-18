@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -10,53 +9,45 @@ import (
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
-	"github.com/urfave/cli/v2"
+	"github.com/spf13/cobra"
 )
 
-var infoCmd = &cli.Command{
-	Name:      "info",
-	Usage:     "print out info about a function",
-	ArgsUsage: "function-name",
-	Flags: []cli.Flag{
-		versionFlag,
-		&cli.StringFlag{
-			Name:    "key",
-			Aliases: []string{"k"},
-			Usage:   "key to print the value of",
-		},
-	},
-	Action: func(c *cli.Context) error {
-		fnName := c.Args().First()
-		fnVer := c.String("version")
-		if c.NArg() != 1 || fnName == "" {
-			return errors.New("must provide a function name as the only arg")
-		}
-		if fnVer == "" {
-			return errors.New("must provide a version")
-		}
-		inf, err := info(fnName, fnVer)
-		if err != nil {
-			return err
-		}
-		k := c.String("key")
-		if k != "" {
-			v, ok := inf[k]
-			if !ok {
-				return fmt.Errorf("key '%s' not found", k)
+var infoCmd *cobra.Command
+
+func init() {
+	var ver string
+	var key string
+	infoCmd = &cobra.Command{
+		Use:   "info function-name",
+		Short: "Print out info about a function",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(c *cobra.Command, args []string) error {
+			fnName := args[0]
+			inf, err := info(fnName, ver)
+			if err != nil {
+				return err
 			}
-			fmt.Println(v)
+			if key != "" {
+				v, ok := inf[key]
+				if !ok {
+					return fmt.Errorf("key '%s' not found", key)
+				}
+				fmt.Println(v)
+				return nil
+			}
+			sortedKeys := make([]string, 0, len(inf))
+			for k := range inf {
+				sortedKeys = append(sortedKeys, k)
+			}
+			sort.Strings(sortedKeys)
+			for _, k := range sortedKeys {
+				fmt.Printf("%s=%s\n", k, inf[k])
+			}
 			return nil
-		}
-		sortedKeys := make([]string, 0, len(inf))
-		for k := range inf {
-			sortedKeys = append(sortedKeys, k)
-		}
-		sort.Strings(sortedKeys)
-		for _, k := range sortedKeys {
-			fmt.Printf("%s=%s\n", k, inf[k])
-		}
-		return nil
-	},
+		},
+	}
+	addVersionFlag(infoCmd.Flags(), &ver)
+	infoCmd.Flags().StringVarP(&key, "key", "k", "", "key to print the value of")
 }
 
 func info(fnName string, fnVer string) (map[string]string, error) {

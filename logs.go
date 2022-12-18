@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -11,58 +10,51 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
-	"github.com/urfave/cli/v2"
+	"github.com/spf13/cobra"
 )
 
-var logsCmd = &cli.Command{
-	Name:      "logs",
-	Aliases:   []string{"log"},
-	Usage:     "print out most recent logs for the function",
-	ArgsUsage: "function-name",
-	Flags: []cli.Flag{
-		versionFlag,
-		&cli.BoolFlag{
-			Name:    "tail",
-			Aliases: []string{"t"},
-			Usage:   "wait for new logs and print them as they come in",
-		},
-		&cli.UintFlag{
-			Name:    "since",
-			Aliases: []string{"s"},
-			Usage:   "only print logs since this many minutes ago",
-			Value:   1,
-		},
-	},
-	Action: func(c *cli.Context) error {
-		if c.NArg() != 1 {
-			return errors.New("must provide a function name as the only arg")
-		}
-		since := time.Now().Add(-time.Duration(c.Uint("since")) * time.Minute)
-		fnName := c.Args().First()
-		ver, err := resolveVersion(fnName, c.String("version"))
-		if err != nil {
-			return fmt.Errorf("failed to resolve version: %s", err)
-		}
+var logsCmd *cobra.Command
 
-		log.Printf("printing logs for version %d", ver)
-
-		var afterToken string
-		for {
-			lgs, err := logs(fnName, ver, since, afterToken)
+func init() {
+	var ver string
+	var since uint
+	var tail bool
+	logsCmd = &cobra.Command{
+		Use:     "logs function-name",
+		Aliases: []string{"log"},
+		Short:   "print out most recent logs for the function",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			since := time.Now().Add(-time.Duration(since) * time.Minute)
+			fnName := args[0]
+			ver, err := resolveVersion(fnName, ver)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to resolve version: %s", err)
 			}
-			for _, l := range lgs.lines {
-				fmt.Println(l)
+
+			log.Printf("printing logs for version %d", ver)
+
+			var afterToken string
+			for {
+				lgs, err := logs(fnName, ver, since, afterToken)
+				if err != nil {
+					return err
+				}
+				for _, l := range lgs.lines {
+					fmt.Println(l)
+				}
+				if !tail {
+					return nil
+				}
+				afterToken = lgs.afterToken
+				since = time.Now().Add(-30 * time.Second)
+				time.Sleep(2 * time.Second)
 			}
-			if !c.Bool("tail") {
-				return nil
-			}
-			afterToken = lgs.afterToken
-			since = time.Now().Add(-30 * time.Second)
-			time.Sleep(2 * time.Second)
-		}
-	},
+		},
+	}
+	addVersionFlag(logsCmd.Flags(), &ver)
+	logsCmd.Flags().BoolVarP(&tail, "tail", "t", false, "wait for new logs and print them as they come in")
+	logsCmd.Flags().UintVarP(&since, "since", "s", 1, "only print logs since this many minutes ago")
 }
 
 type fnLogs struct {

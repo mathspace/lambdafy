@@ -7,14 +7,14 @@ import (
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
-	"github.com/urfave/cli/v2"
+	"github.com/spf13/cobra"
 )
 
-var listCmd = &cli.Command{
-	Name:    "list",
+var listCmd = &cobra.Command{
+	Use:     "list",
 	Aliases: []string{"ls"},
-	Usage:   "list functions",
-	Action: func(c *cli.Context) error {
+	Short:   "List functions",
+	RunE: func(c *cobra.Command, args []string) error {
 		fns, err := listFunctions()
 		if err != nil {
 			return err

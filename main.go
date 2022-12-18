@@ -4,51 +4,42 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
 	_ "github.com/oxplot/starenv/autoload"
-	"github.com/urfave/cli/v2"
+	"github.com/spf13/cobra"
 )
 
 // These will be populated by goreleaser.
 var (
 	version = "dev"
 	commit  = "HEAD"
-	date    = "1970-01-01T00:00:00Z"
 )
 
 func main() {
-	compiledDate, err := time.Parse(time.RFC3339, date)
-	if err != nil {
-		panic(err)
-	}
-	app := &cli.App{
-		Name:        "lambdafy",
-		Usage:       "Use any docker image as a lambda function",
-		Description: "If .env file exists, it will be used to populate env vars. Starenv autoloader is also used. See https://pkg.go.dev/github.com/oxplot/starenv for more details.",
-		Version:     version + " (" + commit + ")",
-		Copyright:   fmt.Sprintf("%d Mathspace Pty. Ltd.", compiledDate.Year()),
-		Compiled:    compiledDate,
-		Commands: []*cli.Command{
-			createSampleProjectCmd,
-			makeCmd,
-			publishCmd,
-			deployCmd,
-			undeployCmd,
-			listCmd,
-			infoCmd,
-			specCmd,
-			logsCmd,
-			versionsCmd,
-			deleteCmd,
-			exampleSpecCmd,
-			exampleRoleCmd,
+	app := &cobra.Command{
+		Use:     "lambdafy",
+		Short:   "Use any docker image as a lambda function",
+		Version: fmt.Sprintf("%s (%s)", version, commit),
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			cmd.SilenceUsage = true
 		},
-		EnableBashCompletion: true,
-		Suggest:              true,
 	}
+	app.AddCommand(createSampleProjectCmd)
+	app.AddCommand(makeCmd)
+	app.AddCommand(publishCmd)
+	app.AddCommand(deployCmd)
+	app.AddCommand(undeployCmd)
+	app.AddCommand(listCmd)
+	app.AddCommand(infoCmd)
+	app.AddCommand(specCmd)
+	app.AddCommand(logsCmd)
+	app.AddCommand(versionsCmd)
+	app.AddCommand(deleteCmd)
+	app.AddCommand(exampleSpecCmd)
+	app.AddCommand(exampleRoleCmd)
+
 	log.SetFlags(0)
-	if err := app.Run(os.Args); err != nil {
-		log.Fatalf("error: %s", err)
+	if err := app.Execute(); err != nil {
+		os.Exit(1)
 	}
 }

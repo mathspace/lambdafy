@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	_ "embed"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -18,22 +17,18 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
-	"github.com/urfave/cli/v2"
+	"github.com/spf13/cobra"
 
 	"github.com/mathspace/lambdafy/fnspec"
 )
 
-var publishCmd = &cli.Command{
-	Name:        "publish",
-	Aliases:     []string{"pub"},
-	Usage:       "publish a new version of a function without routing traffic to it",
-	ArgsUsage:   "spec-file",
-	Description: "Use '-' as spec-file to read from stdin.",
-	Action: func(c *cli.Context) error {
-		if c.NArg() != 1 {
-			return errors.New("must provide a spec file as the only arg")
-		}
-		p := c.Args().First()
+var publishCmd = &cobra.Command{
+	Use:     "publish {spec-file|-}",
+	Aliases: []string{"pub"},
+	Short:   "Publish a new version of a function without routing traffic to it",
+	Args:    cobra.ExactArgs(1),
+	RunE: func(c *cobra.Command, args []string) error {
+		p := args[0]
 		var r io.Reader
 		if p == "-" {
 			r = os.Stdin

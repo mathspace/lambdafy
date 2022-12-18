@@ -12,9 +12,11 @@ require (
 	github.com/docker/docker v20.10.21+incompatible
 	github.com/gobwas/glob v0.2.3
 	github.com/oxplot/starenv v0.8.0
-	github.com/urfave/cli/v2 v2.23.5
+	github.com/spf13/pflag v1.0.5
 	gopkg.in/yaml.v2 v2.4.0
 )
+
+require github.com/inconshreveable/mousetrap v1.0.1 // indirect
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
@@ -37,7 +39,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.11.25 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.13.8 // indirect
 	github.com/aws/smithy-go v1.13.5 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/danieljoos/wincred v1.1.2 // indirect
 	github.com/docker/distribution v2.8.1+incompatible // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
@@ -51,9 +52,8 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0-rc2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
-	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
+	github.com/spf13/cobra v1.6.1
 	github.com/zalando/go-keyring v0.2.1 // indirect
 	golang.org/x/mod v0.7.0 // indirect
 	golang.org/x/net v0.2.0 // indirect

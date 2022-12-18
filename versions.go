@@ -10,7 +10,8 @@ import (
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
-	"github.com/urfave/cli/v2"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 const latestPseudoVersion = "latest"
@@ -59,23 +60,17 @@ func resolveVersion(fnName string, verSpec string) (int, error) {
 	return vint, nil
 }
 
-var versionFlag = &cli.StringFlag{
-	Name:    "version",
-	Aliases: []string{"v"},
-	Usage:   "the version/alias of the function (use 'latest' for latest version)",
-	Value:   activeAlias,
+func addVersionFlag(c *pflag.FlagSet, ver *string) {
+	c.StringVarP(ver, "version", "v", activeAlias, "the version/alias of the function (use 'latest' for latest version)")
 }
 
-var versionsCmd = &cli.Command{
-	Name:      "versions",
-	Aliases:   []string{"ver", "version"},
-	Usage:     "list versions of a function",
-	ArgsUsage: "function-name",
-	Action: func(c *cli.Context) error {
-		fnName := c.Args().First()
-		if c.NArg() != 1 || fnName == "" {
-			return errors.New("must provide a function name as the only arg")
-		}
+var versionsCmd = &cobra.Command{
+	Use:     "versions",
+	Aliases: []string{"ver", "version"},
+	Short:   "List versions of a function",
+	Args:    cobra.ExactArgs(1),
+	RunE: func(c *cobra.Command, args []string) error {
+		fnName := args[0]
 		vers, err := versions(fnName)
 		if err != nil {
 			return err
