@@ -22,7 +22,7 @@ func init() {
 	logsCmd = &cobra.Command{
 		Use:     "logs function-name",
 		Aliases: []string{"log"},
-		Short:   "print out most recent logs for the function",
+		Short:   "Print out most recent logs for the function",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			since := time.Now().Add(-time.Duration(since) * time.Minute)
