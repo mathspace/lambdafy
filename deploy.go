@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,13 +36,16 @@ func init() {
 				return fmt.Errorf("--prime must be between 1 and 100")
 			}
 			fnName := args[0]
-			version := args[1]
+			version, err := resolveVersion(fnName, args[1])
+			if err != nil {
+				return fmt.Errorf("failed to resolve version '%s': %s", args[1], err)
+			}
 
 			fnURL, err := deploy(fnName, version, prime)
 			if err != nil {
 				return err
 			}
-			log.Printf("deployed function '%s' version '%s' to '%s'", fnName, version, fnURL)
+			log.Printf("deployed function '%s' version '%d' to '%s'", fnName, version, fnURL)
 			return nil
 		},
 	}
@@ -68,16 +72,17 @@ func init() {
 	undeployCmd.Flags().BoolVar(&yes, "yes", false, "Actually undeploy the function")
 }
 
-func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, version string, alias string) (string, error) {
+func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, version int, alias string) (string, error) {
 
 	var err error
+	verStr := strconv.Itoa(version)
 
 	// Create or update alias
 
 	if err := retryOnResourceConflict(func() error {
 		_, err := lambdaCl.CreateAlias(ctx, &lambda.CreateAliasInput{
 			FunctionName:    &fnName,
-			FunctionVersion: &version,
+			FunctionVersion: &verStr,
 			Name:            &alias,
 		})
 		return err
@@ -88,7 +93,7 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 		if err := retryOnResourceConflict(func() error {
 			_, err := lambdaCl.UpdateAlias(ctx, &lambda.UpdateAliasInput{
 				FunctionName:    &fnName,
-				FunctionVersion: &version,
+				FunctionVersion: &verStr,
 				Name:            &alias,
 			})
 			return err
@@ -147,7 +152,7 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 }
 
 // publish publishes the lambda function to AWS and returns the function URL.
-func deploy(fnName string, version string, primeCount int) (string, error) {
+func deploy(fnName string, version int, primeCount int) (string, error) {
 	ctx := context.Background()
 
 	// Setup clients
@@ -172,7 +177,7 @@ func deploy(fnName string, version string, primeCount int) (string, error) {
 
 	log.Print("waiting for function to return non 5xx")
 
-	errInst := fmt.Sprintf("Check staging endpoint '%s' and review logs by running 'lambdafy logs -s 15 -v %s %s'", preactiveFnURL, version, fnName)
+	errInst := fmt.Sprintf("Check staging endpoint '%s' and review logs by running 'lambdafy logs -s 15 -v %d %s'", preactiveFnURL, version, fnName)
 
 	// Run with 1 concurrency first to ensure function doesn't make debugging hard
 	// by producing too many log entries.

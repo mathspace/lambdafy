@@ -22,32 +22,45 @@ import (
 	"github.com/mathspace/lambdafy/fnspec"
 )
 
-var publishCmd = &cobra.Command{
-	Use:     "publish {spec-file|-}",
-	Aliases: []string{"pub"},
-	Short:   "Publish a new version of a function without routing traffic to it",
-	Args:    cobra.ExactArgs(1),
-	RunE: func(c *cobra.Command, args []string) error {
-		p := args[0]
-		var r io.Reader
-		if p == "-" {
-			r = os.Stdin
-		} else {
-			f, err := os.Open(p)
-			if err != nil {
-				return fmt.Errorf("failed to open spec file: %s", err)
+var publishCmd *cobra.Command
+
+func init() {
+	var al string
+	publishCmd = &cobra.Command{
+		Use:     "publish {spec-file|-}",
+		Aliases: []string{"pub"},
+		Short:   "Publish a new version of a function without routing traffic to it",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			p := args[0]
+			var r io.Reader
+			if p == "-" {
+				r = os.Stdin
+			} else {
+				f, err := os.Open(p)
+				if err != nil {
+					return fmt.Errorf("failed to open spec file: %s", err)
+				}
+				defer f.Close()
+				r = f
 			}
-			defer f.Close()
-			r = f
-		}
-		out, err := publish(r)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("function-name:%s\n", out.name)
-		fmt.Printf("published-version:%s\n", out.version)
-		return nil
-	},
+			out, err := publish(r)
+			if err != nil {
+				return err
+			}
+			if al != "" {
+				err = alias(out.name, out.version, al)
+				if err != nil {
+					return fmt.Errorf("failed to create alias: %s", err)
+				}
+				fmt.Printf("alias:%s\n", al)
+			}
+			fmt.Printf("function-name:%s\n", out.name)
+			fmt.Printf("published-version:%s\n", out.version)
+			return nil
+		},
+	}
+	publishCmd.Flags().StringVarP(&al, "alias", "a", "", "Alias to create for the new version")
 }
 
 // publishResult holds the results of a publish operation.

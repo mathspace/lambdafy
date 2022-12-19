@@ -24,19 +24,22 @@ func main() {
 			cmd.SilenceUsage = true
 		},
 	}
+
+	app.AddCommand(aliasCmd)
+	app.AddCommand(unaliasCmd)
 	app.AddCommand(createSampleProjectCmd)
+	app.AddCommand(deleteCmd)
+	app.AddCommand(deployCmd)
+	app.AddCommand(exampleRoleCmd)
+	app.AddCommand(exampleSpecCmd)
+	app.AddCommand(infoCmd)
+	app.AddCommand(listCmd)
+	app.AddCommand(logsCmd)
 	app.AddCommand(makeCmd)
 	app.AddCommand(publishCmd)
-	app.AddCommand(deployCmd)
-	app.AddCommand(undeployCmd)
-	app.AddCommand(listCmd)
-	app.AddCommand(infoCmd)
 	app.AddCommand(specCmd)
-	app.AddCommand(logsCmd)
+	app.AddCommand(undeployCmd)
 	app.AddCommand(versionsCmd)
-	app.AddCommand(deleteCmd)
-	app.AddCommand(exampleSpecCmd)
-	app.AddCommand(exampleRoleCmd)
 
 	log.SetFlags(0)
 	if err := app.Execute(); err != nil {

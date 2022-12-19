@@ -20,7 +20,7 @@ func init() {
 	infoCmd = &cobra.Command{
 		Use:   "info function-name",
 		Short: "Print out info about a function",
-		Args:  cobra.ExactArgs(2),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			fnName := args[0]
 			inf, err := info(fnName, ver)
