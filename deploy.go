@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -46,7 +45,7 @@ func init() {
 			return nil
 		},
 	}
-	deployCmd.Flags().Int("prime", 1, "prime the function by sending it concurrent requests")
+	deployCmd.Flags().IntVar(&prime, "prime", 1, "prime the function by sending it concurrent requests")
 }
 
 func init() {
@@ -56,10 +55,11 @@ func init() {
 		Short: "Remove deployment and make function inaccessible",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
+			fnName := args[0]
 			if !yes {
-				return errors.New("must pass --yes to actually undeploy the function")
+				return fmt.Errorf("must pass --yes to actually undeploy the '%s' function", fnName)
 			}
-			if err := undeploy(args[0]); err != nil {
+			if err := undeploy(fnName); err != nil {
 				return err
 			}
 			return nil
@@ -170,18 +170,18 @@ func deploy(fnName string, version string, primeCount int) (string, error) {
 
 	// Loop until the function returns a [234]XX response.
 
-	log.Print("waiting for function to return success")
+	log.Print("waiting for function to return non 5xx")
 
 	errInst := fmt.Sprintf("Check staging endpoint '%s' and review logs by running 'lambdafy logs -s 15 -v %s %s'", preactiveFnURL, version, fnName)
 
 	// Run with 1 concurrency first to ensure function doesn't make debugging hard
 	// by producing too many log entries.
 	if err := prime(preactiveFnURL, 1); err != nil {
-		return "", fmt.Errorf("function failed to return success - aborting deploy: %s\n\n%s", err, errInst)
+		return "", fmt.Errorf("function failed to return non 5xx - aborting deploy: %s\n\n%s", err, errInst)
 	}
 
 	if err := prime(preactiveFnURL, primeCount); err != nil {
-		return "", fmt.Errorf("function failed to return success - aborting deploy: %s\n\n%s", err, errInst)
+		return "", fmt.Errorf("function failed to return non 5xx - aborting deploy: %s\n\n%s", err, errInst)
 	}
 
 	// Prepare active deploy.

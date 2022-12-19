@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -20,10 +19,11 @@ func init() {
 		Short: "delete the function",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
+			fnName := args[0]
 			if !yes {
-				return errors.New("must pass --yes to actually delete the function")
+				return fmt.Errorf("must pass --yes to actually delete the '%s' function", fnName)
 			}
-			return deleteFunction(args[0])
+			return deleteFunction(fnName)
 		},
 	}
 	deleteCmd.Flags().BoolVarP(&yes, "yes", "y", false, "Actually delete the function")
