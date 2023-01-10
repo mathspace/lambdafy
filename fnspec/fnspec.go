@@ -4,6 +4,7 @@ package fnspec
 import (
 	"errors"
 	"io"
+	"io/ioutil"
 	"regexp"
 	"strings"
 
@@ -56,7 +57,22 @@ func (a *Spec) IsAccountRegionAllowed(account, region string) bool {
 }
 
 // Load loads the spec from the given reader.
-func Load(r io.Reader) (*Spec, error) {
+func Load(r io.Reader, vars map[string]string) (*Spec, error) {
+
+	// Replace placeholders in the spec.
+	if vars != nil && len(vars) > 0 {
+		varsArr := make([]string, 0, len(vars)*2)
+		for k, v := range vars {
+			varsArr = append(varsArr, k, v)
+		}
+		rpl := strings.NewReplacer(varsArr...)
+		sptxt, err := ioutil.ReadAll(r)
+		if err != nil {
+			return nil, err
+		}
+		r = strings.NewReader(rpl.Replace(string(sptxt)))
+	}
+
 	var s Spec
 	if err := yaml.NewDecoder(r).Decode(&s); err != nil {
 		return nil, err

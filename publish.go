@@ -26,6 +26,7 @@ var publishCmd *cobra.Command
 
 func init() {
 	var al string
+	var vars *[]string
 	publishCmd = &cobra.Command{
 		Use:     "publish {spec-file|-}",
 		Aliases: []string{"pub"},
@@ -44,7 +45,18 @@ func init() {
 				defer f.Close()
 				r = f
 			}
-			out, err := publish(r)
+
+			// Convert vars to map
+			varMap := make(map[string]string)
+			for _, v := range *vars {
+				parts := strings.SplitN(v, "=", 2)
+				if len(parts) != 2 {
+					return fmt.Errorf("invalid var: %s", v)
+				}
+				varMap[parts[0]] = parts[1]
+			}
+
+			out, err := publish(r, varMap)
 			if err != nil {
 				return err
 			}
@@ -61,6 +73,7 @@ func init() {
 		},
 	}
 	publishCmd.Flags().StringVarP(&al, "alias", "a", "", "Alias to create for the new version")
+	vars = publishCmd.Flags().StringArrayP("var", "v", nil, "Replace placeholders in the spec - e.g. FOO=BAR - can be specified multiple times")
 }
 
 // publishResult holds the results of a publish operation.
@@ -73,8 +86,8 @@ type publishResult struct {
 var roleArnPat = regexp.MustCompile(`^arn:aws:iam::\d+:role/.+`)
 
 // publish publishes the lambda function to AWS.
-func publish(specReader io.Reader) (res publishResult, err error) {
-	spec, err := fnspec.Load(specReader)
+func publish(specReader io.Reader, vars map[string]string) (res publishResult, err error) {
+	spec, err := fnspec.Load(specReader, vars)
 	if err != nil {
 		return res, fmt.Errorf("failed to load function spec: %s", err)
 	}

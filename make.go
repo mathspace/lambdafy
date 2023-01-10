@@ -24,7 +24,7 @@ var proxyBinary []byte
 
 var makeCmd = &cobra.Command{
 	Use:   "make image-name",
-	Short: "Modify the image by adding lambdafy proxy to it",
+	Short: "Modify a docker image by adding lambdafy proxy to it",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(c *cobra.Command, args []string) error {
 		return lambdafyImage(args[0])

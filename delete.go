@@ -16,7 +16,7 @@ func init() {
 	var yes bool
 	deleteCmd = &cobra.Command{
 		Use:   "delete function-name",
-		Short: "delete the function",
+		Short: "Delete the function",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			fnName := args[0]
