@@ -312,7 +312,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 		// Update function config
 
-		ctxTo, cancel := context.WithTimeout(ctx, 10*time.Second)
+		ctxTo, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
 		if err := retryOnResourceConflict(ctxTo, func() error {
 			_, err := lambdaCl.UpdateFunctionConfiguration(ctx, &lambda.UpdateFunctionConfigurationInput{
@@ -337,7 +337,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 		// Update function code
 
-		ctxTo, cancel = context.WithTimeout(ctx, 10*time.Second)
+		ctxTo, cancel = context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
 		if err := retryOnResourceConflict(ctxTo, func() error {
 			r, err := lambdaCl.UpdateFunctionCode(ctx, &lambda.UpdateFunctionCodeInput{
