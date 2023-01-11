@@ -59,7 +59,7 @@ docker push "$_repo_uri"
 
 echo "=> Publish a new version of the function (create if needed)" >&2
 
-sed "s|IMG|$_repo_uri|" spec.yaml | AWS_DEFAULT_REGION="$_region" lambdafy publish - > "$_out"
+AWS_DEFAULT_REGION="$_region" lambdafy publish spec.yaml -v IMG="$_repo_uri" > "$_out"
 
 echo "=> Deploy the function" >&2
 
