@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -16,12 +17,32 @@ import (
 	dockerjsonmsg "github.com/docker/docker/pkg/jsonmessage"
 )
 
+func canonicalizePolicyString(s string, urlenc bool) (string, error) {
+	var err error
+	if urlenc {
+		s, err = url.QueryUnescape(s)
+		if err != nil {
+			return "", err
+		}
+	}
+	var p interface{}
+	if err := json.Unmarshal([]byte(s), &p); err != nil {
+		return "", err
+	}
+	b, err := json.Marshal(p)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(b)), nil
+}
+
 func retryOnResourceConflict(ctx context.Context, fn func() error) error {
 	for {
 		err := fn()
 		switch {
 		case err == nil:
 			return err
+		case strings.Contains(err.Error(), "ARN does not refer to a valid principal"):
 		case strings.Contains(err.Error(), "role defined for the function cannot be assumed"):
 		case strings.Contains(err.Error(), "ResourceConflictException"):
 		case strings.Contains(err.Error(), "exists"):

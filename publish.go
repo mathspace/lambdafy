@@ -44,8 +44,17 @@ var defaultRolePolicyStatements = []fnspec.RolePolicy{
 		Resource: []string{"*"},
 	},
 }
-var defaultAssumeRolePolicy = `{"Statement":[{"Action":"sts:AssumeRole","Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"}}],"Version":"2012-10-17"}`
+
+var defaultAssumeRolePolicy string
 var generatedRolePrefix = "lambdafy-v1-"
+
+func init() {
+	var err error
+	defaultAssumeRolePolicy, err = canonicalizePolicyString(`{"Statement":[{"Action":"sts:AssumeRole","Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"}}],"Version":"2012-10-17"}`, false)
+	if err != nil {
+		panic(err)
+	}
+}
 
 func init() {
 	var al string
@@ -201,7 +210,8 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 		if err != nil {
 			return res, fmt.Errorf("failed to marshal policy: %s", err)
 		}
-		roleName := fmt.Sprintf("%s%x", generatedRolePrefix, md5.Sum(b))
+		canPol, _ := canonicalizePolicyString(string(b), false)
+		roleName := fmt.Sprintf("%s%x", generatedRolePrefix, md5.Sum([]byte(canPol)))
 
 		// Create/update role
 
@@ -229,7 +239,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 		if _, err := iamCl.PutRolePolicy(ctx, &iam.PutRolePolicyInput{
 			RoleName:       &roleName,
 			PolicyName:     aws.String("main"),
-			PolicyDocument: aws.String(string(b)),
+			PolicyDocument: &canPol,
 		}); err != nil {
 			return res, fmt.Errorf("failed to set role policy: %s", err)
 		}

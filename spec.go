@@ -121,7 +121,11 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 		if err != nil {
 			return fmt.Errorf("failed to get role: %s", err)
 		}
-		if r.Role.AssumeRolePolicyDocument != &defaultAssumeRolePolicy {
+		assumedRPD, err := canonicalizePolicyString(*r.Role.AssumeRolePolicyDocument, true)
+		if err != nil {
+			return fmt.Errorf("failed to canonicalize role policy: %s", err)
+		}
+		if assumedRPD != defaultAssumeRolePolicy {
 			return nil
 		}
 		p, err := iamCl.GetRolePolicy(ctx, &iam.GetRolePolicyInput{
@@ -134,16 +138,22 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 			}
 			return fmt.Errorf("failed to get role policy: %s", err)
 		}
-		if fmt.Sprintf("%x", md5.Sum([]byte(*p.PolicyDocument))) != chksum {
+
+		polDoc, err := canonicalizePolicyString(*p.PolicyDocument, true)
+		if err != nil {
+			return fmt.Errorf("failed to canonicalize role policy: %s", err)
+		}
+		if fmt.Sprintf("%x", md5.Sum([]byte(polDoc))) != chksum {
 			return nil
 		}
 
 		policies := struct {
 			Statement []fnspec.RolePolicy
 		}{}
-		if err := json.NewDecoder(strings.NewReader(*p.PolicyDocument)).Decode(&policies); err != nil {
+		if err := json.Unmarshal([]byte(polDoc), &policies); err != nil {
 			return fmt.Errorf("failed to decode role policy: %s", err)
 		}
+
 		spec.Role = fnspec.RoleGenerate
 		spec.RoleExtraPolicy = policies.Statement[1:] // The first one is the default one we add.
 		return nil
