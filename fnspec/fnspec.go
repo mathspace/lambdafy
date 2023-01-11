@@ -95,6 +95,11 @@ func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 	if len(s.RoleExtraPolicy) > 0 && s.Role != RoleGenerate {
 		return nil, errors.New("role_extra_policy can only be used with role: generate")
 	}
+	for _, p := range s.RoleExtraPolicy {
+		if p.Effect == "" || len(p.Action) == 0 || len(p.Resource) == 0 {
+			return nil, errors.New("role_extra_policy items must have effect, action and resource")
+		}
+	}
 	if s.Memory != nil && (*s.Memory < 128 || *s.Memory > 10240) {
 		return nil, errors.New("memory must be between 128 and 10240 MB")
 	}

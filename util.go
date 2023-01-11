@@ -19,7 +19,7 @@ import (
 func retryOnResourceConflict(ctx context.Context, fn func() error) error {
 	for {
 		err := fn()
-		if err == nil || strings.Contains(err.Error(), "role defined for the function cannot be assumed by Lambda") || strings.Contains(err.Error(), "exists") || !strings.Contains(err.Error(), "ResourceConflictException") {
+		if err == nil || !strings.Contains(err.Error(), "role defined for the function cannot be assumed by Lambda") || strings.Contains(err.Error(), "exists") || !strings.Contains(err.Error(), "ResourceConflictException") {
 			return err
 		}
 		t := time.NewTimer(time.Second)
