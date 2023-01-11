@@ -11,6 +11,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -176,6 +177,8 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 	if spec.Role == fnspec.RoleGenerate {
 
+		log.Printf("generating role")
+
 		// Convert tags to iamtype tags
 
 		tags := make([]iamtypes.Tag, len(spec.Tags))
@@ -210,6 +213,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 		})
 		if err == nil {
 			roleArn = *out.Role.Arn
+			log.Printf("created: %s", roleArn)
 		} else {
 			if !strings.Contains(err.Error(), "EntityAlreadyExists") {
 				return res, fmt.Errorf("failed to create role: %s", err)
@@ -308,7 +312,9 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 		// Update function config
 
-		if err := retryOnResourceConflict(func() error {
+		ctxTo, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		if err := retryOnResourceConflict(ctxTo, func() error {
 			_, err := lambdaCl.UpdateFunctionConfiguration(ctx, &lambda.UpdateFunctionConfigurationInput{
 				FunctionName: aws.String(spec.Name),
 				Description:  aws.String(spec.Description),
@@ -331,7 +337,9 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 		// Update function code
 
-		if err := retryOnResourceConflict(func() error {
+		ctxTo, cancel = context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		if err := retryOnResourceConflict(ctxTo, func() error {
 			r, err := lambdaCl.UpdateFunctionCode(ctx, &lambda.UpdateFunctionCodeInput{
 				FunctionName:  aws.String(spec.Name),
 				Architectures: []lambdatypes.Architecture{lambdatypes.ArchitectureX8664},

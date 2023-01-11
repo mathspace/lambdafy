@@ -16,13 +16,18 @@ import (
 	dockerjsonmsg "github.com/docker/docker/pkg/jsonmessage"
 )
 
-func retryOnResourceConflict(fn func() error) error {
+func retryOnResourceConflict(ctx context.Context, fn func() error) error {
 	for {
 		err := fn()
-		if err == nil || strings.Contains(err.Error(), "exists") || !strings.Contains(err.Error(), "ResourceConflictException") {
+		if err == nil || strings.Contains(err.Error(), "role defined for the function cannot be assumed by Lambda") || strings.Contains(err.Error(), "exists") || !strings.Contains(err.Error(), "ResourceConflictException") {
 			return err
 		}
-		time.Sleep(time.Second)
+		t := time.NewTimer(time.Second)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-t.C:
+		}
 	}
 }
 

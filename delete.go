@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -46,7 +47,9 @@ func deleteFunction(name string) error {
 	}
 	lambdaCl := lambda.NewFromConfig(acfg)
 
-	if err := retryOnResourceConflict(func() error {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	if err := retryOnResourceConflict(ctx, func() error {
 		_, err := lambdaCl.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
 			FunctionName: &name,
 		})

@@ -79,7 +79,7 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 
 	// Create or update alias
 
-	if err := retryOnResourceConflict(func() error {
+	if err := retryOnResourceConflict(ctx, func() error {
 		_, err := lambdaCl.CreateAlias(ctx, &lambda.CreateAliasInput{
 			FunctionName:    &fnName,
 			FunctionVersion: &verStr,
@@ -90,7 +90,7 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 		if !strings.Contains(err.Error(), "already exists") {
 			return "", fmt.Errorf("failed to create function alias '%s': %s", alias, err)
 		}
-		if err := retryOnResourceConflict(func() error {
+		if err := retryOnResourceConflict(ctx, func() error {
 			_, err := lambdaCl.UpdateAlias(ctx, &lambda.UpdateAliasInput{
 				FunctionName:    &fnName,
 				FunctionVersion: &verStr,
@@ -106,7 +106,7 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 
 	var fnURL string
 	var cfuc *lambda.CreateFunctionUrlConfigOutput
-	if err := retryOnResourceConflict(func() error {
+	if err := retryOnResourceConflict(ctx, func() error {
 		cfuc, err = lambdaCl.CreateFunctionUrlConfig(ctx, &lambda.CreateFunctionUrlConfigInput{
 			AuthType:     lambdatypes.FunctionUrlAuthTypeNone,
 			FunctionName: &fnName,
@@ -117,7 +117,7 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 		if !strings.Contains(err.Error(), "exists for this") {
 			return "", fmt.Errorf("failed to create function URL for alias '%s': %s", alias, err)
 		}
-		if err := retryOnResourceConflict(func() error {
+		if err := retryOnResourceConflict(ctx, func() error {
 			ufuc, err := lambdaCl.UpdateFunctionUrlConfig(ctx, &lambda.UpdateFunctionUrlConfigInput{
 				AuthType:     lambdatypes.FunctionUrlAuthTypeNone,
 				FunctionName: &fnName,
@@ -134,7 +134,7 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 
 	// Add public access permission
 
-	if err := retryOnResourceConflict(func() error {
+	if err := retryOnResourceConflict(ctx, func() error {
 		_, err := lambdaCl.AddPermission(ctx, &lambda.AddPermissionInput{
 			StatementId:         aws.String("AllowPublicAccess"),
 			Action:              aws.String("lambda:InvokeFunctionUrl"),
@@ -168,7 +168,9 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 
 	log.Printf("deploying to staging endpoint for testing")
 
-	preactiveFnURL, err := prepareDeploy(ctx, lambdaCl, fnName, version, preactiveAlias)
+	ctxTo, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	preactiveFnURL, err := prepareDeploy(ctxTo, lambdaCl, fnName, version, preactiveAlias)
 	if err != nil {
 		return "", err
 	}
@@ -181,11 +183,11 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 
 	// Run with 1 concurrency first to ensure function doesn't make debugging hard
 	// by producing too many log entries.
-	if err := prime(preactiveFnURL, 1); err != nil {
+	if err := prime(ctx, preactiveFnURL, 1); err != nil {
 		return "", fmt.Errorf("function failed to return non 5xx - aborting deploy: %s\n\n%s", err, errInst)
 	}
 
-	if err := prime(preactiveFnURL, primeCount); err != nil {
+	if err := prime(ctx, preactiveFnURL, primeCount); err != nil {
 		return "", fmt.Errorf("function failed to return non 5xx - aborting deploy: %s\n\n%s", err, errInst)
 	}
 
@@ -193,7 +195,9 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 
 	log.Printf("staging success - deploying to active endpoint")
 
-	activeFnURL, err := prepareDeploy(ctx, lambdaCl, fnName, version, activeAlias)
+	ctxTo, cancel = context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	activeFnURL, err := prepareDeploy(ctxTo, lambdaCl, fnName, version, activeAlias)
 	if err != nil {
 		return "", err
 	}
@@ -204,14 +208,15 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 }
 
 func undeploy(fnName string) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 	acfg, err := awsconfig.LoadDefaultConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load aws config: %s", err)
 	}
 	lambdaCl := lambda.NewFromConfig(acfg)
 
-	if err := retryOnResourceConflict(func() error {
+	if err := retryOnResourceConflict(ctx, func() error {
 		_, err := lambdaCl.DeleteAlias(ctx, &lambda.DeleteAliasInput{
 			FunctionName: &fnName,
 			Name:         aws.String(activeAlias),
@@ -224,8 +229,8 @@ func undeploy(fnName string) error {
 	return nil
 }
 
-func prime(url string, num int) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+func prime(ctx context.Context, url string, num int) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	wg := sync.WaitGroup{}
 	wg.Add(num)
 	errCh := make(chan error, num)
