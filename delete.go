@@ -11,6 +11,7 @@ import (
 )
 
 var deleteCmd *cobra.Command
+var cleanupRolesCmd *cobra.Command
 
 func init() {
 	var yes bool
@@ -27,6 +28,14 @@ func init() {
 		},
 	}
 	deleteCmd.Flags().BoolVarP(&yes, "yes", "y", false, "Actually delete the function")
+
+	cleanupRolesCmd = &cobra.Command{
+		Use:   "cleanup-roles",
+		Short: "Cleans up unused generated roles",
+		RunE: func(c *cobra.Command, args []string) error {
+			return cleanupRoles()
+		},
+	}
 }
 
 func deleteFunction(name string) error {
@@ -47,4 +56,8 @@ func deleteFunction(name string) error {
 	}
 
 	return nil
+}
+
+func cleanupRoles() error {
+	return fmt.Errorf("not implemented")
 }

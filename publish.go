@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -14,6 +16,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
@@ -23,6 +26,25 @@ import (
 )
 
 var publishCmd *cobra.Command
+
+var defaultRolePolicyStatements = []fnspec.RolePolicy{
+	{
+		Effect: "Allow",
+		Action: []string{
+			"logs:CreateLogGroup",
+			"logs:CreateLogStream",
+			"logs:PutLogEvents",
+			"ec2:CreateNetworkInterface",
+			"ec2:DescribeNetworkInterfaces",
+			"ec2:DeleteNetworkInterface",
+			"ec2:AssignPrivateIpAddresses",
+			"ec2:UnassignPrivateIpAddresses",
+		},
+		Resource: []string{"*"},
+	},
+}
+var defaultAssumeRolePolicy = `{"Statement":[{"Action":"sts:AssumeRole","Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"}}],"Version":"2012-10-17"}`
+var generatedRolePrefix = "lambdafy-v1-"
 
 func init() {
 	var al string
@@ -150,12 +172,64 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 	}
 
 	var roleArn string
+	iamCl := iam.NewFromConfig(acfg)
 
 	if roleArnPat.MatchString(spec.Role) {
 		roleArn = spec.Role
+	} else if spec.Role == "generate" {
+
+		// Convert tags to iamtype tags
+
+		tags := make([]iamtypes.Tag, len(spec.Tags))
+		for k, v := range spec.Tags {
+			tags = append(tags, iamtypes.Tag{
+				Key:   aws.String(k),
+				Value: aws.String(v),
+			})
+		}
+
+		// Serialize policy into JSON string
+
+		var policy []fnspec.RolePolicy
+		policy = append(policy, defaultRolePolicyStatements...)
+		policy = append(policy, spec.RoleExtraPolicy...)
+		b, err := json.Marshal(map[string]interface{}{
+			"Version":   "2012-10-17",
+			"Statement": policy,
+		})
+		if err != nil {
+			return res, fmt.Errorf("failed to marshal policy: %s", err)
+		}
+		roleName := fmt.Sprintf("%s%x", generatedRolePrefix, md5.Sum(b))
+
+		// Create/update role
+
+		out, err := iamCl.CreateRole(ctx, &iam.CreateRoleInput{
+			RoleName:                 &roleName,
+			Description:              aws.String("lambdafy generated role"),
+			AssumeRolePolicyDocument: &defaultAssumeRolePolicy,
+			Tags:                     tags,
+		})
+		if err != nil {
+			if !strings.Contains(err.Error(), "EntityAlreadyExists") {
+				return res, fmt.Errorf("failed to create role: %s", err)
+			}
+		}
+
+		// Set policy
+
+		if _, err := iamCl.PutRolePolicy(ctx, &iam.PutRolePolicyInput{
+			RoleName:       &roleName,
+			PolicyName:     aws.String("main"),
+			PolicyDocument: aws.String(string(b)),
+		}); err != nil {
+			return res, fmt.Errorf("failed to set role policy: %s", err)
+		}
+
+		roleArn = *out.Role.Arn
+
 	} else {
 
-		iamCl := iam.NewFromConfig(acfg)
 		role, err := iamCl.GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(spec.Role)})
 		if err != nil {
 			return res, fmt.Errorf("failed to lookup role '%s': %s", spec.Role, err)

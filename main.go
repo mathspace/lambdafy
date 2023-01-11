@@ -26,7 +26,7 @@ func main() {
 	}
 
 	app.AddCommand(aliasCmd)
-	app.AddCommand(unaliasCmd)
+	app.AddCommand(cleanupRolesCmd)
 	app.AddCommand(createSampleProjectCmd)
 	app.AddCommand(deleteCmd)
 	app.AddCommand(deployCmd)
@@ -38,6 +38,7 @@ func main() {
 	app.AddCommand(makeCmd)
 	app.AddCommand(publishCmd)
 	app.AddCommand(specCmd)
+	app.AddCommand(unaliasCmd)
 	app.AddCommand(undeployCmd)
 	app.AddCommand(versionsCmd)
 

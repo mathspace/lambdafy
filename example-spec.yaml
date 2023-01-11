@@ -13,12 +13,27 @@ name: my-great-app
 # requests. `lambdafy make` command can be used to convert any HTTP
 # server based docker image to a lambda compatible image (while
 # maintaining its original behavior when run outside of lambda runtime).
-image: nginx
+image: 123456789123.dkr.ecr.ap-southeast-2.amazonaws.com/repo12356
 
 # role is the name of a IAM role.
 # Run `lambdafy example-role` to see terraform definition for a basic
 # role needed to run the lambda function.
-role: my-great-app-role
+# You can let lambdafy generate a role for you by specifying the literal
+# 'generate'. The generated role will be named 'lambdafy-XXXX' where
+# 'XXXX' is the MD5 sum of the policies. You can add additional policy
+# using role_extra_policy.
+role: generate
+
+# role_extra_policy allows specifying extra policy statements when using
+# 'role: generate'.
+#
+# role_extra_policy:
+#   - effect: Allow
+#     actions:
+#       - "s3:GetObject"
+#     resources:
+#       - "*"
+
 # env defines the environmental variables available to the app. The
 # values follow the format for https://pkg.go.dev/github.com/oxplot/starenv
 # In short:

@@ -20,12 +20,20 @@ type EFSMount struct {
 	Path string `yaml:"path"` // Path to mount the EFS filesystem at.
 }
 
+// RolePolicy represents a policy for a lambda function's IAM role.
+type RolePolicy struct {
+	Effect   string   `yaml:"effect" json:"Effect"`
+	Action   []string `yaml:"action" json:"Action"`
+	Resource []string `yaml:"resource" json:"Resource"`
+}
+
 // Spec is the specification of a lambda function.
 type Spec struct {
 	Name                  string            `yaml:"name"`
 	Description           string            `yaml:"description,omitempty"`
 	Image                 string            `yaml:"image"`
 	Role                  string            `yaml:"role"`
+	RoleExtraPolicy       []RolePolicy      `yaml:"role_extra_policy,omitempty"`
 	Env                   map[string]string `yaml:"env,omitempty"`
 	Entrypoint            []string          `yaml:"entrypoint,omitempty"`
 	Command               []string          `yaml:"command,omitempty"`
@@ -79,6 +87,9 @@ func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 	}
 	if s.Name == "" || s.Image == "" || s.Role == "" {
 		return nil, errors.New("name, image and role must be specified")
+	}
+	if len(s.RoleExtraPolicy) > 0 && s.Role != "generate" {
+		return nil, errors.New("role_extra_policy can only be used with role: generate")
 	}
 	if s.Memory != nil && (*s.Memory < 128 || *s.Memory > 10240) {
 		return nil, errors.New("memory must be between 128 and 10240 MB")

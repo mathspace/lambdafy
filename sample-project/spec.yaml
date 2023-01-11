@@ -1,5 +1,5 @@
 name: lambdafy-sample-project
 image: IMG
-role: lambdafy-sample-project
+role: generate
 memory: 512
 cpu: 1

@@ -57,31 +57,6 @@ echo "=> Push the docker image to ECR" >&2
 
 docker push "$_repo_uri"
 
-echo "=> Create bare minimum IAM role for lambda" >&2
-
-_role_name="lambdafy-sample-project"
-
-aws iam create-role --role-name "$_role_name" --assume-role-policy-document '{
-  "Version":"2012-10-17",
-  "Statement":[{
-    "Effect":"Allow",
-    "Principal":{
-      "Service":"lambda.amazonaws.com"
-    },
-    "Action":"sts:AssumeRole"
-  }]
-}' > "$_out" 2> "$_err" || {
-  if ! grep -qi "already exist" "$_err"; then
-    echo "Failed to create IAM role" >&2
-    cat "$_err" >&2
-    exit 1
-  fi
-}
-
-echo "=> Attach cloudwatch logs policy to the role so the lambda function can write to logs" >&2
-
-aws iam attach-role-policy --role-name "$_role_name" --policy-arn arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
-
 echo "=> Publish a new version of the function (create if needed)" >&2
 
 sed "s|IMG|$_repo_uri|" spec.yaml | AWS_DEFAULT_REGION="$_region" lambdafy publish - > "$_out"
@@ -98,4 +73,5 @@ AWS_DEFAULT_REGION="$_region" lambdafy info -k url lambdafy-sample-project
 
 echo '* To view live logs, run `lambdafy logs --tail lambdafy-sample-project`'
 echo '* To delete the function, run `lambdafy delete lambdafy-sample-project`'
-echo '* You will need to manually delete the other resources (IAM Role, ECR Repo)'
+echo '* To cleanup generated roles, run `lambdafy cleanup-roles`'
+echo '* You will need to manually delete the other resources (e.g. ECR Repo)'
