@@ -19,7 +19,13 @@ import (
 func retryOnResourceConflict(ctx context.Context, fn func() error) error {
 	for {
 		err := fn()
-		if err == nil || !strings.Contains(err.Error(), "role defined for the function cannot be assumed by Lambda") || strings.Contains(err.Error(), "exists") || !strings.Contains(err.Error(), "ResourceConflictException") {
+		switch {
+		case err == nil:
+			return err
+		case strings.Contains(err.Error(), "role defined for the function cannot be assumed"):
+		case strings.Contains(err.Error(), "ResourceConflictException"):
+		case strings.Contains(err.Error(), "exists"):
+		default:
 			return err
 		}
 		t := time.NewTimer(time.Second)
@@ -60,7 +66,7 @@ func copyFile(dst, src string) error {
 	return out.Close()
 }
 
-// processDockerResponse decodes the JSON line stream of docker daemon
+// processDockerResponse decodes the JSOrole defined for the function cannot be assumedN line stream of docker daemon
 // and determines if there is any error. All other output is discarded.
 func processDockerResponse(r io.Reader) error {
 	d := json.NewDecoder(r)
