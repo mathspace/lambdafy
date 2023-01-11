@@ -213,7 +213,6 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 		})
 		if err == nil {
 			roleArn = *out.Role.Arn
-			log.Printf("created: %s", roleArn)
 		} else {
 			if !strings.Contains(err.Error(), "EntityAlreadyExists") {
 				return res, fmt.Errorf("failed to create role: %s", err)
