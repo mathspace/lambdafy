@@ -144,7 +144,7 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 		if err := json.NewDecoder(strings.NewReader(*p.PolicyDocument)).Decode(&policies); err != nil {
 			return fmt.Errorf("failed to decode role policy: %s", err)
 		}
-		spec.Role = "generate"
+		spec.Role = fnspec.RoleGenerate
 		spec.RoleExtraPolicy = policies.Statement[1:] // The first one is the default one we add.
 		return nil
 	}(); err != nil {

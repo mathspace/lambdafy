@@ -12,6 +12,10 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// RoleGenerate is a special role name that indicates the role should be
+// generated.
+const RoleGenerate = "generate"
+
 var ecrRepoPat = regexp.MustCompile(`^\d+\.dkr\.ecr\.[^.]+\.amazonaws\.com/`)
 
 // EFSMount represents an AWS Elastic Filesystem mount.
@@ -88,7 +92,7 @@ func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 	if s.Name == "" || s.Image == "" || s.Role == "" {
 		return nil, errors.New("name, image and role must be specified")
 	}
-	if len(s.RoleExtraPolicy) > 0 && s.Role != "generate" {
+	if len(s.RoleExtraPolicy) > 0 && s.Role != RoleGenerate {
 		return nil, errors.New("role_extra_policy can only be used with role: generate")
 	}
 	if s.Memory != nil && (*s.Memory < 128 || *s.Memory > 10240) {

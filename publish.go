@@ -176,7 +176,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 	if roleArnPat.MatchString(spec.Role) {
 		roleArn = spec.Role
-	} else if spec.Role == "generate" {
+	} else if spec.Role == fnspec.RoleGenerate {
 
 		// Convert tags to iamtype tags
 
