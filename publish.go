@@ -174,9 +174,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 	var roleArn string
 	iamCl := iam.NewFromConfig(acfg)
 
-	if roleArnPat.MatchString(spec.Role) {
-		roleArn = spec.Role
-	} else if spec.Role == fnspec.RoleGenerate {
+	if spec.Role == fnspec.RoleGenerate {
 
 		// Convert tags to iamtype tags
 
@@ -210,10 +208,17 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 			AssumeRolePolicyDocument: &defaultAssumeRolePolicy,
 			Tags:                     tags,
 		})
-		if err != nil {
+		if err == nil {
+			roleArn = *out.Role.Arn
+		} else {
 			if !strings.Contains(err.Error(), "EntityAlreadyExists") {
 				return res, fmt.Errorf("failed to create role: %s", err)
 			}
+			out, err := iamCl.GetRole(ctx, &iam.GetRoleInput{RoleName: &roleName})
+			if err != nil {
+				return res, fmt.Errorf("failed to get role: %s", err)
+			}
+			roleArn = *out.Role.Arn
 		}
 
 		// Set policy
@@ -226,8 +231,8 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 			return res, fmt.Errorf("failed to set role policy: %s", err)
 		}
 
-		roleArn = *out.Role.Arn
-
+	} else if roleArnPat.MatchString(spec.Role) {
+		roleArn = spec.Role
 	} else {
 
 		role, err := iamCl.GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(spec.Role)})
