@@ -7,9 +7,9 @@ set -euo pipefail
 
 echo "=> Build the docker image" >&2
 
-docker build -t lambdafy-sample-project -t "$_repo_uri" .
+docker build -t lambdafy-sample-project .
 
-echo "=> Publish a new version of the function (create if needed)" >&2
+echo "=> Lambdafy, push and publish a new version of the function (create if needed)" >&2
 
 lambdafy publish --alias main --force-update-alias spec.yaml
 
