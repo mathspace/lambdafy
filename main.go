@@ -37,6 +37,7 @@ func main() {
 	app.AddCommand(logsCmd)
 	app.AddCommand(makeCmd)
 	app.AddCommand(publishCmd)
+	app.AddCommand(pushCmd)
 	app.AddCommand(specCmd)
 	app.AddCommand(unaliasCmd)
 	app.AddCommand(undeployCmd)
