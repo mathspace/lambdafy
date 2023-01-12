@@ -130,7 +130,7 @@ func push(imgName string, repoName string, create bool) (string, error) {
 	repoURL = *o.Repositories[0].RepositoryUri
 	repoImage := repoURL + ":" + repoParts[1]
 
-	log.Print("tagging image locally")
+	log.Printf("tagging image locally to '%s'", repoImage)
 
 	dc.ImageTag(ctx, imgName, repoImage)
 

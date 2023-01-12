@@ -59,6 +59,7 @@ func init() {
 func init() {
 	var al string
 	var vars *[]string
+	var forceUpdateAlias bool
 	publishCmd = &cobra.Command{
 		Use:     "publish {spec-file|-}",
 		Aliases: []string{"pub"},
@@ -93,7 +94,7 @@ func init() {
 				return err
 			}
 			if al != "" {
-				err = alias(out.name, out.version, al)
+				err = alias(out.name, out.version, al, forceUpdateAlias)
 				if err != nil {
 					return fmt.Errorf("failed to create alias: %s", err)
 				}
@@ -105,6 +106,7 @@ func init() {
 		},
 	}
 	publishCmd.Flags().StringVarP(&al, "alias", "a", "", "Alias to create for the new version")
+	publishCmd.Flags().BoolVarP(&forceUpdateAlias, "force-update-alias", "A", false, "Force update the alias if already exists")
 	vars = publishCmd.Flags().StringArrayP("var", "v", nil, "Replace placeholders in the spec - e.g. FOO=BAR - can be specified multiple times")
 }
 
@@ -178,7 +180,22 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 	// Prepare to create/update lambda function
 
 	if len(spec.Entrypoint) > 0 && spec.Entrypoint[0] != "/lambdafy-proxy" {
+		log.Printf("prefixing entrypoint with '/lambdafy-proxy'")
 		spec.Entrypoint = append([]string{"/lambdafy-proxy"}, spec.Entrypoint...)
+	}
+
+	// Make and push if necessary
+
+	if spec.MakeAndPush() {
+		log.Printf("lambdafying image '%s' and pushing", spec.Image)
+		var err error
+		if err = lambdafyImage(spec.Image); err != nil {
+			return res, fmt.Errorf("failed to lambdafy image: %s", err)
+		}
+		spec.Image, err = push(spec.Image, spec.RepoName, *spec.CreateRepo)
+		if err != nil {
+			return res, fmt.Errorf("failed to push image: %s", err)
+		}
 	}
 
 	var roleArn string

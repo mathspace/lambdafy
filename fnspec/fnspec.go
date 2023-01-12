@@ -38,6 +38,8 @@ type Spec struct {
 	Image                 string            `yaml:"image"`
 	Role                  string            `yaml:"role"`
 	RoleExtraPolicy       []RolePolicy      `yaml:"role_extra_policy,omitempty"`
+	CreateRepo            *bool             `yaml:"create_repo,omitempty"`
+	RepoName              string            `yaml:"repo_name,omitempty"`
 	Env                   map[string]string `yaml:"env,omitempty"`
 	Entrypoint            []string          `yaml:"entrypoint,omitempty"`
 	Command               []string          `yaml:"command,omitempty"`
@@ -66,6 +68,11 @@ func (a *Spec) IsAccountRegionAllowed(account, region string) bool {
 		}
 	}
 	return false
+}
+
+// MakeAndPush returns true if the image should be built and pushed to ECR.
+func (a *Spec) MakeAndPush() bool {
+	return !ecrRepoPat.MatchString(a.Image)
 }
 
 // Load loads the spec from the given reader.
@@ -116,8 +123,18 @@ func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 		}
 		s.allowedGlobs = append(s.allowedGlobs, g)
 	}
-	if !ecrRepoPat.MatchString(s.Image) {
-		return nil, errors.New("image must be an ECR repository")
+	if ecrRepoPat.MatchString(s.Image) {
+		if s.RepoName != "" || s.CreateRepo != nil {
+			return nil, errors.New("repo_name and create_repo can only be used with non-ECR docker images")
+		}
+	} else {
+		t := true
+		if s.CreateRepo == nil {
+			s.CreateRepo = &t
+		}
+		if s.RepoName == "" {
+			s.RepoName = s.Name
+		}
 	}
 	if !strings.Contains(s.Image, ":") {
 		s.Image += ":latest"

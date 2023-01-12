@@ -9,11 +9,24 @@
 # app. Same for environments or variations of your app.
 name: my-great-app
 
-# Docker image to use. The image must handle lambda API Gateway
-# requests. `lambdafy make` command can be used to convert any HTTP
-# server based docker image to a lambda compatible image (while
-# maintaining its original behavior when run outside of lambda runtime).
-image: 123456789123.dkr.ecr.ap-southeast-2.amazonaws.com/repo12356
+# Docker image to use. If an ECR image URI is given, it is used as is to
+# create the function. However, if a non-ECR image is specified, it's
+# run through `lambdafy make` and `lambdafy push` first and the
+# resulting ECR image name is used instead.
+# When specifying a non-ECR image URI, you can set 'create_repo' and
+# 'repo_name' config as well to tune the default behavior.
+image: ubuntu
+
+# create_repo specifies whether to create the ECR repo if it doesn't
+# exist, for non-ECR images. It's true by default. This is equivalent to
+# `-c` option of `lambdafy push`.
+#
+# create_repo: true
+
+# repo_name specifies the name of the ECR repo that is used for non-ECR
+# images. By default, it's set to the function name.
+#
+# repo_name: my-great-app
 
 # role is the name of a IAM role.
 # Run `lambdafy example-role` to see terraform definition for a basic
@@ -48,7 +61,9 @@ role: generate
 #   CONFIG: "*s3:app-bucket/path/to/config"
 
 # entrypoint is analogous to Dockerfile ENTRYPOINT directive. Specifying
-# it will override the existing ENTRYPOINT in the docker image.
+# it will override the existing ENTRYPOINT in the docker image. Note
+# that '/lambdafy-proxy' is prepended to the list you specify here
+# unless the list already starts with it.
 #
 # entrypoint:
 #   - /bin/sh
