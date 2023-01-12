@@ -85,10 +85,12 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 	spec.Memory = gfo.Configuration.MemorySize
 	spec.Timeout = gfo.Configuration.Timeout
 	spec.Tags = gfo.Tags
-	spec.VPCSecurityGroupIds = gfo.Configuration.VpcConfig.SecurityGroupIds
-	sort.StringSlice(spec.VPCSecurityGroupIds).Sort()
-	spec.VPCSubnetIds = gfo.Configuration.VpcConfig.SubnetIds
-	sort.StringSlice(spec.VPCSubnetIds).Sort()
+	if gfo.Configuration.VpcConfig != nil {
+		spec.VPCSecurityGroupIds = gfo.Configuration.VpcConfig.SecurityGroupIds
+		sort.StringSlice(spec.VPCSecurityGroupIds).Sort()
+		spec.VPCSubnetIds = gfo.Configuration.VpcConfig.SubnetIds
+		sort.StringSlice(spec.VPCSubnetIds).Sort()
+	}
 	for _, fsc := range gfo.Configuration.FileSystemConfigs {
 		spec.EFSMounts = append(spec.EFSMounts, fnspec.EFSMount{
 			ARN:  *fsc.Arn,
