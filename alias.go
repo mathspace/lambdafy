@@ -46,7 +46,7 @@ func init() {
 
 // alias creates an alias for a function at a specific version.
 func alias(fnName string, version string, aliasName string, force bool) error {
-	if aliasPat.MatchString(aliasName) {
+	if !aliasPat.MatchString(aliasName) {
 		return fmt.Errorf("invalid alias name: '%s' - must match '%s'", aliasName, aliasPatStr)
 	}
 	ctx := context.Background()
