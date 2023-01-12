@@ -45,7 +45,9 @@ func retryOnResourceConflict(ctx context.Context, fn func() error) error {
 		case strings.Contains(err.Error(), "ARN does not refer to a valid principal"):
 		case strings.Contains(err.Error(), "role defined for the function cannot be assumed"):
 		case strings.Contains(err.Error(), "ResourceConflictException"):
-		case strings.Contains(err.Error(), "exists"):
+			if strings.Contains(err.Error(), "exists") {
+				return err
+			}
 		default:
 			return err
 		}
