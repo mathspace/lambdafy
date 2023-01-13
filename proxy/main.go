@@ -163,6 +163,18 @@ func run() (exitCode int, err error) {
 	}
 	cmdName := os.Args[1]
 
+	// Remove all env vars with LAMBDAFY_ prefix to prevent child process from
+	// depending on them.
+
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, "LAMBDAFY_") {
+			parts := strings.SplitN(e, "=", 2)
+			if len(parts) == 2 {
+				os.Unsetenv(parts[0])
+			}
+		}
+	}
+
 	if !inLambda {
 		if verbose {
 			log.Print("not running in lambda, exec the command directly")
@@ -195,24 +207,14 @@ func run() (exitCode int, err error) {
 		lambda.StartWithContext(ctx, handler)
 	}()
 
-	// Duplicate own env and add PORT to it.
+	// Set/override the PORT env var
 
-	env := make([]string, 0, len(os.Environ())+1)
-	for _, v := range os.Environ() {
-		if strings.HasPrefix(v, "PORT=") {
-			// Under lambda, the only valid port is the one set by us, so ignore
-			// external one.
-			continue
-		}
-		env = append(env, v)
-	}
-	env = append(env, fmt.Sprintf("PORT=%d", port))
+	os.Setenv("PORT", strconv.Itoa(port))
 
 	cmd := exec.CommandContext(ctx, cmdName, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = env
 	if err := cmd.Start(); err != nil {
 		cancel()
 		return 127, fmt.Errorf("failed to run command: %s", err)
