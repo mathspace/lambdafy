@@ -72,9 +72,24 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 	spec.Description = *gfo.Configuration.Description
 	spec.Image = *gfo.Code.ImageUri
 	spec.Role = *gfo.Configuration.Role
+
 	if env := gfo.Configuration.Environment; env != nil {
 		spec.Env = env.Variables
+
+		if spec.Env["LAMBDAFY__SPEC_CORS"] == "true" {
+			spec.CORS = true
+		}
+
+		// HACK remove LAMBDAFY__SPEC_ prefixed env vars as they are a hack to store
+		// spec related stuff in the function config.
+
+		for k := range spec.Env {
+			if strings.HasPrefix(k, "LAMBDAFY__SPEC_") {
+				delete(spec.Env, k)
+			}
+		}
 	}
+
 	if icr := gfo.Configuration.ImageConfigResponse; icr != nil {
 		if imc := icr.ImageConfig; imc != nil {
 			spec.Entrypoint = imc.EntryPoint

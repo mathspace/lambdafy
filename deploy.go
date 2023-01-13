@@ -102,6 +102,22 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 		}
 	}
 
+	// Check if CORS is enabled
+
+	var cors *lambdatypes.Cors
+	gfo, err := lambdaCl.GetFunction(ctx, &lambda.GetFunctionInput{
+		FunctionName: &fnName,
+		Qualifier:    &alias,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to get function '%s' alias '%s': %s", fnName, alias, err)
+	}
+	env := gfo.Configuration.Environment
+	if env != nil && env.Variables["LAMBDAFY__SPEC_CORS"] == "true" {
+		cors = new(lambdatypes.Cors)
+		cors.AllowOrigins = []string{"*"}
+	}
+
 	// Create or update function URL
 
 	var fnURL string
@@ -111,6 +127,7 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 			AuthType:     lambdatypes.FunctionUrlAuthTypeNone,
 			FunctionName: &fnName,
 			Qualifier:    &alias,
+			Cors:         cors,
 		})
 		return err
 	}); err != nil {
@@ -122,6 +139,7 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 				AuthType:     lambdatypes.FunctionUrlAuthTypeNone,
 				FunctionName: &fnName,
 				Qualifier:    &alias,
+				Cors:         cors,
 			})
 			fnURL = *ufuc.FunctionUrl
 			return err

@@ -52,6 +52,7 @@ type Spec struct {
 	EFSMounts             []EFSMount        `yaml:"efs_mounts,omitempty"`
 	TempSize              *int32            `yaml:"temp_size,omitempty"`
 	AllowedAccountRegions []string          `yaml:"allowed_account_regions,omitempty"`
+	CORS                  bool              `yaml:"cors,omitempty"`
 	allowedGlobs          []glob.Glob       `yaml:"-"`
 }
 

@@ -127,6 +127,12 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 	}
 	res.name = spec.Name
 
+	// HACK add CORS config to env vars so it can be used when deploying.
+
+	if spec.CORS {
+		spec.Env["LAMBDAFY__SPEC_CORS"] = "true"
+	}
+
 	ctx := context.Background()
 
 	// Setup clients
