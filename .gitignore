@@ -2,3 +2,5 @@
 /proxy-linux-amd64
 /.env
 /lambdafy
+/go.work
+/go.work.sum
