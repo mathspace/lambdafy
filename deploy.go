@@ -104,7 +104,6 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 
 	// Check if CORS is enabled
 
-	var cors *lambdatypes.Cors
 	gfo, err := lambdaCl.GetFunction(ctx, &lambda.GetFunctionInput{
 		FunctionName: &fnName,
 		Qualifier:    &alias,
@@ -113,8 +112,8 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 		return "", fmt.Errorf("failed to get function '%s' alias '%s': %s", fnName, alias, err)
 	}
 	env := gfo.Configuration.Environment
+	var cors lambdatypes.Cors
 	if env != nil && env.Variables[specInEnvPrefix+"CORS"] == "true" {
-		cors = new(lambdatypes.Cors)
 		cors.AllowOrigins = []string{"*"}
 	}
 
@@ -127,7 +126,7 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 			AuthType:     lambdatypes.FunctionUrlAuthTypeNone,
 			FunctionName: &fnName,
 			Qualifier:    &alias,
-			Cors:         cors,
+			Cors:         &cors,
 		})
 		return err
 	}); err != nil {
@@ -139,7 +138,7 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 				AuthType:     lambdatypes.FunctionUrlAuthTypeNone,
 				FunctionName: &fnName,
 				Qualifier:    &alias,
-				Cors:         cors,
+				Cors:         &cors,
 			})
 			fnURL = *ufuc.FunctionUrl
 			return err
