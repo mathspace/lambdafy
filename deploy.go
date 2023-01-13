@@ -113,7 +113,7 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 		return "", fmt.Errorf("failed to get function '%s' alias '%s': %s", fnName, alias, err)
 	}
 	env := gfo.Configuration.Environment
-	if env != nil && env.Variables["LAMBDAFY__SPEC_CORS"] == "true" {
+	if env != nil && env.Variables[specInEnvPrefix+"CORS"] == "true" {
 		cors = new(lambdatypes.Cors)
 		cors.AllowOrigins = []string{"*"}
 	}

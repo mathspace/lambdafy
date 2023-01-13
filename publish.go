@@ -45,8 +45,14 @@ var defaultRolePolicyStatements = []fnspec.RolePolicy{
 	},
 }
 
-var defaultAssumeRolePolicy string
-var generatedRolePrefix = "lambdafy-v1-"
+const (
+	specInEnvPrefix     = "LAMBDAFY__SPEC_"
+	generatedRolePrefix = "lambdafy-v1-"
+)
+
+var (
+	defaultAssumeRolePolicy string
+)
 
 func init() {
 	var err error
@@ -130,7 +136,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 	// HACK add CORS config to env vars so it can be used when deploying.
 
 	if spec.CORS {
-		spec.Env["LAMBDAFY__SPEC_CORS"] = "true"
+		spec.Env[specInEnvPrefix+"CORS"] = "true"
 	}
 
 	ctx := context.Background()
