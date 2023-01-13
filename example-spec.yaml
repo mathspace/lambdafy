@@ -42,9 +42,9 @@ role: generate
 #
 # role_extra_policy:
 #   - effect: Allow
-#     actions:
+#     action:
 #       - "s3:GetObject"
-#     resources:
+#     resource:
 #       - "*"
 
 # env defines the environmental variables available to the app. The
