@@ -24,10 +24,12 @@ import (
 	_ "github.com/oxplot/starenv/autoload"
 )
 
+const lambdafyEnvPrefix = "LAMBDAFY_"
+
 var (
 	port     int    // port that proxy will proxy requests to
 	endpoint string // end point that proxy will proxy requests to
-	verbose  = os.Getenv("LAMBDAFY_PROXY_LOGGING") == "verbose"
+	verbose  = os.Getenv(lambdafyEnvPrefix+"PROXY_LOGGING") == "verbose"
 	inLambda = os.Getenv("AWS_LAMBDA_FUNCTION_VERSION") != "" && os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" && os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != ""
 	reqCount int32
 	started  = make(chan struct{})
@@ -163,15 +165,12 @@ func run() (exitCode int, err error) {
 	}
 	cmdName := os.Args[1]
 
-	// Remove all env vars with LAMBDAFY_ prefix to prevent child process from
+	// Remove all env vars with lambdafy prefix to prevent child process from
 	// depending on them.
 
 	for _, e := range os.Environ() {
-		if strings.HasPrefix(e, "LAMBDAFY_") {
-			parts := strings.SplitN(e, "=", 2)
-			if len(parts) == 2 {
-				os.Unsetenv(parts[0])
-			}
+		if strings.HasPrefix(e, lambdafyEnvPrefix) {
+			os.Unsetenv(strings.SplitN(e, "=", 2)[0])
 		}
 	}
 
