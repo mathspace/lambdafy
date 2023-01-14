@@ -1,17 +1,70 @@
-resource "aws_iam_role" "fn" {
-  name               = "my-custom-function" // TODO modify before use
-  assume_role_policy = <<-EOF
-  {
-    "Version": "2012-10-17",
-    "Statement": [{
-      "Effect": "Allow",
-      "Principals": [{
-        "Type": "Service",
-        "Identifiers": ["lambda.amazonaws.com"]
-      }],
-      "Actions": ["sts:AssumeRole"]
-    }]
+// There are two roles in this example:
+//
+// 1. The role that lambdafy tool requires to be able to create and manage the
+//    functions (lambdafy).
+
+resource "aws_iam_user" "lambdafy" {
+  name = "lambdafy-cli"
+}
+
+data "aws_iam_policy_document" "lambdafy" {
+  version = "2012-10-17"
+
+  statement {
+    effect    = "Allow"
+    actions   = ["lambda:*"]
+    resources = ["*"]
   }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "iam:GetRole",
+      "iam:GetRolePolicy",
+      "iam:ListAttachedRolePolicies",
+      "iam:ListRolePolicies",
+      "iam:PassRole",
+      "iam:SimulatePrincipalPolicy",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "iam:CreateRole",
+      "iam:PutRolePolicy",
+      "iam:UpdateRole",
+    ]
+    resources = [
+      "arn:aws:iam::*:role/lambdafy-*",
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "ecr:CreateRepository",
+      "ecr:GetAuthorizationToken",
+    ]
+    resources = ["*"]
+  }
+
+}
+
+resource "aws_iam_user_policy" "lambdafy" {
+  name   = aws_iam_user.lambdafy.name
+  user   = aws_iam_user.lambdafy.name
+  policy = data.aws_iam_policy_document.lambdafy.json
+}
+
+// 2. The role for the Lambda function itself (fn) - this is not needed if
+//    'role: generate' is used in the lambdafy spec.
+
+resource "aws_iam_role" "fn" {
+  name               = "my-custom-function"
+  assume_role_policy = <<EOF
+{{.AssumeRolePolicy -}}
   EOF
   inline_policy {
     name = "main"
@@ -21,26 +74,8 @@ resource "aws_iam_role" "fn" {
     //   "Action": ["ssm:GetParameter"],
     //   "Resource": ["arn:aws:ssm:*:*:parameter/my_fn/*"]
     // }
-    policy = <<-EOF
-    {
-      "Version": "2012-10-17",
-      "Statement": [
-        {
-          "Effect": "Allow",
-          "Action": [
-            "logs:CreateLogGroup",
-            "logs:CreateLogStream",
-            "logs:PutLogEvents",
-            "ec2:CreateNetworkInterface",
-            "ec2:DescribeNetworkInterfaces",
-            "ec2:DeleteNetworkInterface",
-            "ec2:AssignPrivateIpAddresses",
-            "ec2:UnassignPrivateIpAddresses"
-          ],
-          "Resource": ["*"]
-        }
-      ]
-    }
+    policy = <<EOF
+{{.InlinePolicy -}}
     EOF
   }
 }

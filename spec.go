@@ -140,9 +140,13 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 		}
 		assumedRPD, err := canonicalizePolicyString(*r.Role.AssumeRolePolicyDocument, true)
 		if err != nil {
-			return fmt.Errorf("failed to canonicalize role policy: %s", err)
+			return fmt.Errorf("failed to canonicalize actual assume role policy: %s", err)
 		}
-		if assumedRPD != defaultAssumeRolePolicy {
+		expAssumedRPD, err := canonicalizePolicyString(defaultAssumeRolePolicy, true)
+		if err != nil {
+			return fmt.Errorf("failed to canonicalize expected assume role policy: %s", err)
+		}
+		if assumedRPD != expAssumedRPD {
 			return nil
 		}
 		p, err := iamCl.GetRolePolicy(ctx, &iam.GetRolePolicyInput{

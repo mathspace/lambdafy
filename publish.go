@@ -50,17 +50,19 @@ const (
 	generatedRolePrefix = "lambdafy-v1-"
 )
 
-var (
-	defaultAssumeRolePolicy string
-)
-
-func init() {
-	var err error
-	defaultAssumeRolePolicy, err = canonicalizePolicyString(`{"Statement":[{"Action":"sts:AssumeRole","Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"}}],"Version":"2012-10-17"}`, false)
-	if err != nil {
-		panic(err)
-	}
+var defaultAssumeRolePolicy = `{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      }
+    }
+  ]
 }
+`
 
 func init() {
 	var al string
@@ -229,17 +231,11 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 		// Serialize policy into JSON string
 
-		var policy []fnspec.RolePolicy
-		policy = append(policy, defaultRolePolicyStatements...)
-		policy = append(policy, spec.RoleExtraPolicy...)
-		b, err := json.Marshal(map[string]interface{}{
-			"Version":   "2012-10-17",
-			"Statement": policy,
-		})
+		pol, err := serializeRolePolicy(spec.RoleExtraPolicy)
 		if err != nil {
-			return res, fmt.Errorf("failed to marshal policy: %s", err)
+			return res, fmt.Errorf("failed to serialize role policy: %s", err)
 		}
-		canPol, _ := canonicalizePolicyString(string(b), false)
+		canPol, _ := canonicalizePolicyString(pol, false)
 		roleName := fmt.Sprintf("%s%x", generatedRolePrefix, md5.Sum([]byte(canPol)))
 
 		// Create/update role
@@ -426,4 +422,23 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 	log.Printf("waiting for function to become ready")
 
 	return res, waitOnFunc(ctx, lambdaCl, spec.Name)
+}
+
+func serializeRolePolicy(extra []fnspec.RolePolicy) (string, error) {
+	var policy []fnspec.RolePolicy
+	policy = append(policy, defaultRolePolicyStatements...)
+	policy = append(policy, extra...)
+	w := strings.Builder{}
+	enc := json.NewEncoder(&w)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(struct {
+		Version   string
+		Statement []fnspec.RolePolicy
+	}{
+		Version:   "2012-10-17",
+		Statement: policy,
+	}); err != nil {
+		return "", err
+	}
+	return w.String(), nil
 }

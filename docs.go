@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"text/template"
 
 	"github.com/spf13/cobra"
 )
@@ -37,7 +38,17 @@ var exampleRoleCmd = &cobra.Command{
 	Use:   "example-role",
 	Short: "Prints an example IAM role in terraform format to stdout",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Print(exampleRole)
+		inlinePol, err := serializeRolePolicy(nil)
+		if err != nil {
+			return err
+		}
+		tpl := template.Must(template.New("example-role").Parse(exampleRole))
+		if err := tpl.Execute(os.Stdout, map[string]string{
+			"AssumeRolePolicy": defaultAssumeRolePolicy,
+			"InlinePolicy":     inlinePol,
+		}); err != nil {
+			return err
+		}
 		return nil
 	},
 }
