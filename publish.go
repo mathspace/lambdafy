@@ -102,15 +102,18 @@ func init() {
 				return err
 			}
 			if al != "" {
-				err = alias(out.name, out.version, al, forceUpdateAlias)
+				err = alias(out.Name, out.Version, al, forceUpdateAlias)
 				if err != nil {
 					return fmt.Errorf("failed to create alias: %s", err)
 				}
-				fmt.Printf("alias:%s\n", al)
+				return formatOutput(struct {
+					publishResult
+					Alias string `json:"alias"`
+				}{
+					out, al,
+				})
 			}
-			fmt.Printf("function-name:%s\n", out.name)
-			fmt.Printf("published-version:%s\n", out.version)
-			return nil
+			return formatOutput(out)
 		},
 	}
 	publishCmd.Flags().StringVarP(&al, "alias", "a", "", "Alias to create for the new version")
@@ -120,9 +123,9 @@ func init() {
 
 // publishResult holds the results of a publish operation.
 type publishResult struct {
-	arn     string
-	name    string
-	version string
+	ARN     string `json:"arn"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
 }
 
 var roleArnPat = regexp.MustCompile(`^arn:aws:iam::\d+:role/.+`)
@@ -133,7 +136,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 	if err != nil {
 		return res, fmt.Errorf("failed to load function spec: %s", err)
 	}
-	res.name = spec.Name
+	res.Name = spec.Name
 
 	// HACK add CORS config to env vars so it can be used when deploying.
 
@@ -337,8 +340,8 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 		if err != nil {
 			return res, fmt.Errorf("failed to create function: %s", err)
 		}
-		res.arn = *r.FunctionArn
-		res.version = *r.Version
+		res.ARN = *r.FunctionArn
+		res.Version = *r.Version
 
 	} else {
 
@@ -383,8 +386,8 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 			if err != nil {
 				return err
 			}
-			res.arn = *r.FunctionArn
-			res.version = *r.Version
+			res.ARN = *r.FunctionArn
+			res.Version = *r.Version
 			return nil
 		}); err != nil {
 			return res, fmt.Errorf("failed to update function code: %s", err)

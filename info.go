@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -16,7 +15,6 @@ var infoCmd *cobra.Command
 
 func init() {
 	var ver string
-	var key string
 	infoCmd = &cobra.Command{
 		Use:   "info function-name",
 		Short: "Print out info about a function",
@@ -27,27 +25,10 @@ func init() {
 			if err != nil {
 				return err
 			}
-			if key != "" {
-				v, ok := inf[key]
-				if !ok {
-					return fmt.Errorf("key '%s' not found", key)
-				}
-				fmt.Println(v)
-				return nil
-			}
-			sortedKeys := make([]string, 0, len(inf))
-			for k := range inf {
-				sortedKeys = append(sortedKeys, k)
-			}
-			sort.Strings(sortedKeys)
-			for _, k := range sortedKeys {
-				fmt.Printf("%s=%s\n", k, inf[k])
-			}
-			return nil
+			return formatOutput(inf)
 		},
 	}
 	addVersionFlag(infoCmd.Flags(), &ver)
-	infoCmd.Flags().StringVarP(&key, "key", "k", "", "key to print the value of")
 }
 
 func info(fnName string, fnVer string) (map[string]string, error) {
@@ -71,7 +52,7 @@ func info(fnName string, fnVer string) (map[string]string, error) {
 		if err != nil {
 			return inf, fmt.Errorf("failed to get versions: %s", err)
 		}
-		fnVer = strconv.Itoa(vers[len(vers)-1].version)
+		fnVer = strconv.Itoa(vers[len(vers)-1].Version)
 
 	} else if _, err := strconv.Atoi(fnVer); err != nil { // not a number
 		alias, err := lambdaCl.GetAlias(ctx, &lambda.GetAliasInput{
@@ -109,7 +90,7 @@ func info(fnName string, fnVer string) (map[string]string, error) {
 
 	inf["version"] = *gfo.Configuration.Version
 	inf["image"] = *gfo.Code.ImageUri
-	inf["resolved-image"] = *gfo.Code.ResolvedImageUri
+	inf["resolved_image"] = *gfo.Code.ResolvedImageUri
 	inf["role"] = *gfo.Configuration.Role
 	inf["timestamp"] = *gfo.Configuration.LastModified
 	return inf, nil

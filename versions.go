@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-	"strings"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -32,7 +31,7 @@ func resolveVersion(fnName string, verSpec string) (int, error) {
 		if err != nil {
 			return 0, fmt.Errorf("failed lookup latest version: %s", err)
 		}
-		return vers[len(vers)-1].version, nil
+		return vers[len(vers)-1].Version, nil
 	}
 
 	lookupVer := &verSpec
@@ -75,17 +74,14 @@ var versionsCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		for _, v := range vers {
-			fmt.Printf("%d:%s:%s\n", v.version, strings.Join(v.aliases, ","), v.description)
-		}
-		return nil
+		return formatOutput(vers)
 	},
 }
 
 type fnVersion struct {
-	version     int
-	aliases     []string
-	description string
+	Version     int      `json:"version"`
+	Aliases     []string `json:"aliases"`
+	Description string   `json:"description"`
 }
 
 func versions(fnName string) ([]fnVersion, error) {
@@ -133,17 +129,21 @@ func versions(fnName string) ([]fnVersion, error) {
 				if err != nil {
 					return nil, fmt.Errorf("failed to convert version to int: %s", err)
 				}
+				al := aliases[*v.Version]
+				if al == nil {
+					al = []string{}
+				}
 				vs = append(vs, fnVersion{
-					version:     intVer,
-					aliases:     aliases[*v.Version],
-					description: *v.Description,
+					Version:     intVer,
+					Aliases:     al,
+					Description: *v.Description,
 				})
 			}
 		}
 	}
 
 	sort.Slice(vs, func(i, j int) bool {
-		return vs[i].version < vs[j].version
+		return vs[i].Version < vs[j].Version
 	})
 
 	return vs, nil
