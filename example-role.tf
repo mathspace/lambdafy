@@ -7,55 +7,52 @@ resource "aws_iam_user" "lambdafy" {
   name = "lambdafy-cli"
 }
 
-data "aws_iam_policy_document" "lambdafy" {
-  version = "2012-10-17"
-
-  statement {
-    effect    = "Allow"
-    actions   = ["lambda:*"]
-    resources = ["*"]
-  }
-
-  statement {
-    effect = "Allow"
-    actions = [
-      "iam:GetRole",
-      "iam:GetRolePolicy",
-      "iam:ListAttachedRolePolicies",
-      "iam:ListRolePolicies",
-      "iam:PassRole",
-      "iam:SimulatePrincipalPolicy",
-    ]
-    resources = ["*"]
-  }
-
-  statement {
-    effect = "Allow"
-    actions = [
-      "iam:CreateRole",
-      "iam:PutRolePolicy",
-      "iam:UpdateRole",
-    ]
-    resources = [
-      "arn:aws:iam::*:role/lambdafy-*",
-    ]
-  }
-
-  statement {
-    effect = "Allow"
-    actions = [
-      "ecr:CreateRepository",
-      "ecr:GetAuthorizationToken",
-    ]
-    resources = ["*"]
-  }
-
-}
-
 resource "aws_iam_user_policy" "lambdafy" {
   name   = aws_iam_user.lambdafy.name
   user   = aws_iam_user.lambdafy.name
-  policy = data.aws_iam_policy_document.lambdafy.json
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["lambda:*"],
+      "Resource": ["*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListRolePolicies",
+        "iam:PassRole",
+        "iam:SimulatePrincipalPolicy"
+      ],
+      "Resource": ["*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:PutRolePolicy",
+        "iam:UpdateRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:role/lambdafy-*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecr:CreateRepository",
+        "ecr:GetAuthorizationToken"
+      ],
+      "Resource": ["*"]
+    }
+  ]
+}
+EOF
 }
 
 // 2. The role for the Lambda function itself (fn) - this is not needed if
