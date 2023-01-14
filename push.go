@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/md5"
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
@@ -71,7 +70,11 @@ func push(imgName string, repoName string, create bool) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to inspect image '%s': %s", imgName, err)
 	}
-	imgDigest := fmt.Sprintf("%x", md5.Sum([]byte(img.ID)))
+	imgDigestParts := strings.Split(img.ID, ":")
+	if len(imgDigestParts) != 2 {
+		return "", fmt.Errorf("invalid image digest '%s'", img.ID)
+	}
+	imgDigest := imgDigestParts[1]
 
 	// Ensure the image is built for the correct platform.
 
