@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
@@ -22,9 +23,9 @@ var pushCmd *cobra.Command
 func init() {
 	var create bool
 	pushCmd = &cobra.Command{
-		Use:   "push image-name repo-name",
+		Use:   "push image-name[:tag] repo-name",
 		Short: "Pushes a docker image to a ECR repository",
-		Long:  "Pushes a docker image to a ECR repository. Both image-name and repo-name can have tags. The pushed image URI is printed to stdout on success.",
+		Long:  "Pushes a docker image to a ECR repository. The pushed image URI is printed to stdout on success.",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(c *cobra.Command, args []string) error {
 			repoImage, err := push(args[0], args[1], create)
@@ -44,15 +45,8 @@ func push(imgName string, repoName string, create bool) (string, error) {
 
 	ctx := context.Background()
 
-	// Split imgName to get base and the tag
-
-	imgParts := strings.SplitN(imgName, ":", 2)
-	if len(imgParts) == 1 {
-		imgParts = append(imgParts, "latest")
-	}
-	repoParts := strings.SplitN(repoName, ":", 2)
-	if len(repoParts) == 1 {
-		repoParts = append(imgParts, "latest")
+	if strings.Contains(repoName, ":") {
+		return "", errors.New("repo-name cannot contain a tag - a unique tag is generated automatically")
 	}
 
 	// Setup clients
@@ -70,6 +64,20 @@ func push(imgName string, repoName string, create bool) (string, error) {
 		return "", fmt.Errorf("failed to load aws config: %s", err)
 	}
 	ecrCl := ecr.NewFromConfig(acfg)
+
+	// Get the image digest rehash it to MD5 for more compact representation.
+
+	img, _, err := dc.ImageInspectWithRaw(ctx, imgName)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect image '%s': %s", imgName, err)
+	}
+	imgDigest := fmt.Sprintf("%x", md5.Sum([]byte(img.ID)))
+
+	// Ensure the image is built for the correct platform.
+
+	if img.Architecture != "amd64" || img.Os != "linux" {
+		return "", fmt.Errorf("platform of docker image '%s' must be linux/amd64", imgName)
+	}
 
 	log.Print("logging in to ECR")
 
@@ -102,7 +110,7 @@ func push(imgName string, repoName string, create bool) (string, error) {
 
 	var repoURL string
 	o, err := ecrCl.DescribeRepositories(ctx, &ecr.DescribeRepositoriesInput{
-		RepositoryNames: []string{repoParts[0]},
+		RepositoryNames: []string{repoName},
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "RepositoryNotFoundException") {
@@ -117,7 +125,7 @@ func push(imgName string, repoName string, create bool) (string, error) {
 				return "", fmt.Errorf("failed to create repository '%s': %s", repoName, err)
 			}
 			o, err = ecrCl.DescribeRepositories(ctx, &ecr.DescribeRepositoriesInput{
-				RepositoryNames: []string{repoParts[0]},
+				RepositoryNames: []string{repoName},
 			})
 			if err != nil {
 				return "", fmt.Errorf("failed to describe repository '%s': %s", repoName, err)
@@ -128,9 +136,9 @@ func push(imgName string, repoName string, create bool) (string, error) {
 		}
 	}
 	repoURL = *o.Repositories[0].RepositoryUri
-	repoImage := repoURL + ":" + repoParts[1]
+	repoImage := repoURL + ":" + imgDigest
 
-	log.Printf("tagging image locally to '%s'", repoImage)
+	log.Printf("tagging image")
 
 	dc.ImageTag(ctx, imgName, repoImage)
 
