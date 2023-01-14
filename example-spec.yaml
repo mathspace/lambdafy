@@ -114,6 +114,12 @@ role: generate
 # vpc_subnet_ids:
 #   - "34623423"
 
+# cors enables cross-origin resource sharing (CORS) for the function.
+# If specified, the function will respond to OPTIONS requests with
+# appropriate CORS headers.
+#
+# cors: false
+
 # allowed_account_regions is a list of account:region that specify which
 # AWS account and region combinations are allowed to be deployed to.
 # This ensures accidental overwrites do not happen. Wildcards can be
