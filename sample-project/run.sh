@@ -15,7 +15,7 @@ lambdafy publish --alias main --force-update-alias spec.yaml
 
 echo "=> Deploy the function" >&2
 
-lambdafy deploy lambdafy-sample-project main
+lambdafy deploy lambdafy-sample-project main > /dev/null
 
 echo "=> Done!"
 

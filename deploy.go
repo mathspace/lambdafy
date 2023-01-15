@@ -45,8 +45,11 @@ func init() {
 			if err != nil {
 				return err
 			}
-			log.Printf("deployed function '%s' version '%d' to '%s'", fnName, version, fnURL)
-			return nil
+			return formatOutput(map[string]string{
+				"name":    fnName,
+				"version": strconv.Itoa(version),
+				"url":     fnURL,
+			})
 		},
 	}
 	deployCmd.Flags().IntVar(&prime, "prime", 1, "prime the function by sending it concurrent requests")
