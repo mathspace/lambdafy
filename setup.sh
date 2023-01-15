@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Used to download and install lambdafy on a linux/amd64 host
 set -euo pipefail
-_ver="${1:-0.29}"
+_ver="${1:-0.30}"
 mkdir -p ~/bin
 cd ~/bin
 echo "Downloading lambdafy version $_ver ..."
