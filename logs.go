@@ -17,7 +17,7 @@ var logsCmd *cobra.Command
 
 func init() {
 	var ver string
-	var since uint
+	var sinceDur time.Duration
 	var tail bool
 	logsCmd = &cobra.Command{
 		Use:     "logs function-name",
@@ -25,7 +25,7 @@ func init() {
 		Short:   "Print out most recent logs for the function",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
-			since := time.Now().Add(-time.Duration(since) * time.Minute)
+			since := time.Now().Add(-sinceDur)
 			fnName := args[0]
 			ver, err := resolveVersion(fnName, ver)
 			if err != nil {
@@ -54,7 +54,7 @@ func init() {
 	}
 	addVersionFlag(logsCmd.Flags(), &ver)
 	logsCmd.Flags().BoolVarP(&tail, "tail", "t", false, "wait for new logs and print them as they come in")
-	logsCmd.Flags().UintVarP(&since, "since", "s", 1, "only print logs since this many minutes ago")
+	logsCmd.Flags().DurationVarP(&sinceDur, "since", "s", time.Minute, "only print logs since this length of time ago")
 }
 
 type fnLogs struct {
