@@ -89,7 +89,7 @@ func copyFile(dst, src string) error {
 	return out.Close()
 }
 
-// processDockerResponse decodes the JSOrole defined for the function cannot be assumedN line stream of docker daemon
+// processDockerResponse decodes the JSON line stream of docker daemon
 // and determines if there is any error. All other output is discarded.
 func processDockerResponse(r io.Reader) error {
 	d := json.NewDecoder(r)
