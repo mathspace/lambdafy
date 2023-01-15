@@ -83,8 +83,9 @@ func logs(fnName string, version int, since time.Time, afterToken string) (fnLog
 	// look at logstreams a few days into the past first.
 	const maxDays = 3
 	prefixDate := since.UTC().AddDate(0, 0, -(maxDays - 1))
+	now := time.Now()
 
-	for i := 0; i < maxDays; i++ {
+	for prefixDate.Before(now) {
 		streamPrefix := fmt.Sprintf("%s/[%d]", prefixDate.Format("2006/01/02"), version)
 		pgr := cloudwatchlogs.NewFilterLogEventsPaginator(logsCl, &cloudwatchlogs.FilterLogEventsInput{
 			LogGroupName:        logGroupName,
@@ -98,7 +99,7 @@ func logs(fnName string, version int, since time.Time, afterToken string) (fnLog
 				if !strings.Contains(err.Error(), "ResourceNotFoundException") {
 					return lgs, fmt.Errorf("failed to get log events: %s", err)
 				}
-				return lgs, nil
+				break
 			}
 			for _, e := range ents.Events {
 				if afterToken == "" {
