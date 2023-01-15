@@ -35,6 +35,7 @@ func init() {
 func info(fnName string, fnVer string) (map[string]string, error) {
 	inf := map[string]string{
 		"name": fnName,
+		"url":  "",
 	}
 	ctx := context.Background()
 	acfg, err := awsconfig.LoadDefaultConfig(ctx)
@@ -48,7 +49,6 @@ func info(fnName string, fnVer string) (map[string]string, error) {
 	// out of the function alias.
 
 	if fnVer == latestPseudoVersion {
-		fnVer = "latest"
 		vers, err := versions(fnName)
 		if err != nil {
 			return inf, fmt.Errorf("failed to get versions: %s", err)
@@ -56,23 +56,15 @@ func info(fnName string, fnVer string) (map[string]string, error) {
 		fnVer = strconv.Itoa(vers[len(vers)-1].Version)
 
 	} else if _, err := strconv.Atoi(fnVer); err != nil { // not a number
-		alias, err := lambdaCl.GetAlias(ctx, &lambda.GetAliasInput{
+		fu, err := lambdaCl.GetFunctionUrlConfig(ctx, &lambda.GetFunctionUrlConfigInput{
 			FunctionName: &fnName,
-			Name:         &fnVer,
+			Qualifier:    &fnVer,
 		})
-		if err != nil && !strings.Contains(err.Error(), "404") {
-			return inf, fmt.Errorf("failed to lookup function alias: %s", err)
-		}
-
-		if err == nil {
-			inf["version"] = *alias.FunctionVersion
-			fu, err := lambdaCl.GetFunctionUrlConfig(ctx, &lambda.GetFunctionUrlConfigInput{
-				FunctionName: &fnName,
-				Qualifier:    &fnVer,
-			})
-			if err != nil {
+		if err != nil {
+			if !strings.Contains(err.Error(), "ResourceNotFoundException") {
 				return inf, fmt.Errorf("failed to get function url: %s", err)
 			}
+		} else {
 			inf["url"] = *fu.FunctionUrl
 		}
 	}
