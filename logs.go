@@ -96,7 +96,10 @@ func logs(fnName string, version int, since time.Time, afterToken string) (fnLog
 		for pgr.HasMorePages() {
 			ents, err := pgr.NextPage(ctx)
 			if err != nil {
-				return lgs, fmt.Errorf("failed to get log events: %s", err)
+				if !strings.Contains(err.Error(), "ResourceNotFoundException") {
+					return lgs, fmt.Errorf("failed to get log events: %s", err)
+				}
+				return lgs, nil
 			}
 			for _, e := range ents.Events {
 				if afterToken == "" {
