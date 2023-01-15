@@ -21,8 +21,9 @@ echo "=> Done!"
 
 echo
 echo -n "* Visit at "
-lambdafy info -k url lambdafy-sample-project
+lambdafy info -o '{{.url}}' lambdafy-sample-project
 
+echo
 echo '* To view live logs, run `lambdafy logs --tail lambdafy-sample-project`'
 echo '* To delete the function, run `lambdafy delete lambdafy-sample-project`'
 echo '* To cleanup generated roles, run `lambdafy cleanup-roles`'
