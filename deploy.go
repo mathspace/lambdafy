@@ -246,6 +246,7 @@ func undeploy(fnName string) error {
 	return nil
 }
 
+// prime primes the function by sending requests to it.
 func prime(ctx context.Context, url string, num int) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	wg := sync.WaitGroup{}

@@ -82,6 +82,7 @@ func alias(fnName string, version string, aliasName string, force bool) error {
 	return nil
 }
 
+// unalias deletes an existing alias.
 func unalias(fnName, aliasName string) error {
 	ctx := context.Background()
 	acfg, err := awsconfig.LoadDefaultConfig(ctx)

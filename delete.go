@@ -39,6 +39,7 @@ func init() {
 	}
 }
 
+// deleteFunction deletes a function.
 func deleteFunction(name string) error {
 	ctx := context.Background()
 	acfg, err := awsconfig.LoadDefaultConfig(ctx)

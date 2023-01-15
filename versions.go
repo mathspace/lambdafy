@@ -18,7 +18,8 @@ const latestPseudoVersion = "latest"
 // resolveVersion resolves the given version spec to an actual version. If a
 // numerical version is provided, it will be returned as is. Otherwise, function
 // aliase names are looked up. "latest" is a special case referring to the
-// latest version of the function.
+// latest version of the function. "latest" is NOT the same as lambda's
+// "$LATEST".
 func resolveVersion(fnName string, verSpec string) (int, error) {
 	if verSpec == "" {
 		return 0, errors.New("version spec must not be empty")
@@ -59,6 +60,9 @@ func resolveVersion(fnName string, verSpec string) (int, error) {
 	return vint, nil
 }
 
+// addVersionFlag adds a version flag to the given flag set. This is used in
+// various commands that take version information in order to provide
+// consistency. The version flag defaults to the active alias.
 func addVersionFlag(c *pflag.FlagSet, ver *string) {
 	c.StringVarP(ver, "version", "v", activeAlias, "the version/alias of the function (use 'latest' for latest version)")
 }
@@ -78,12 +82,14 @@ var versionsCmd = &cobra.Command{
 	},
 }
 
+// fnVersion represents a version of a function.
 type fnVersion struct {
 	Version     int      `json:"version"`
 	Aliases     []string `json:"aliases"`
 	Description string   `json:"description"`
 }
 
+// versions returns a list of all versions of the given function.
 func versions(fnName string) ([]fnVersion, error) {
 
 	vs := []fnVersion{}

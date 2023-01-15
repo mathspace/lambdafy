@@ -17,6 +17,9 @@ import (
 	dockerjsonmsg "github.com/docker/docker/pkg/jsonmessage"
 )
 
+// canonicalizePolicyString canonicalizes a policy string by unmarshaling and
+// marshaling it. This is used to ensure that the policy string is in a
+// format that results in consistent hashing.
 func canonicalizePolicyString(s string, urlenc bool) (string, error) {
 	var err error
 	if urlenc {
@@ -36,6 +39,8 @@ func canonicalizePolicyString(s string, urlenc bool) (string, error) {
 	return strings.TrimSpace(string(b)), nil
 }
 
+// retryOnResourceConflict retries a function if it returns a resource conflict error.
+// It also retries on a few other errors that are known to be transient.
 func retryOnResourceConflict(ctx context.Context, fn func() error) error {
 	for {
 		err := fn()

@@ -45,6 +45,7 @@ func init() {
 	addVersionFlag(specCmd.Flags(), &ver)
 }
 
+// generateSpec generates a function spec from a published function.
 func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 
 	spec := fnspec.Spec{}

@@ -67,7 +67,6 @@ type fnLogs struct {
 // logs returns the logs for a function at the specified version.
 // afterToken is a token to pass to get more recent logs.
 // This log retriever is super primitive, thanks to the complexities of AWS.
-// It basically pulls the last 60s of the logs.
 func logs(fnName string, version int, since time.Time, afterToken string) (fnLogs, error) {
 	lgs := fnLogs{}
 	ctx := context.Background()

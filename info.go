@@ -31,6 +31,7 @@ func init() {
 	addVersionFlag(infoCmd.Flags(), &ver)
 }
 
+// info returns information about a function.
 func info(fnName string, fnVer string) (map[string]string, error) {
 	inf := map[string]string{
 		"name": fnName,
