@@ -1,3 +1,4 @@
 name: lambdafy-sample-project
 image: lambdafy-sample-project
 role: generate
+create_repo: true
