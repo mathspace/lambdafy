@@ -53,7 +53,9 @@ resource "aws_iam_user_policy" "lambdafy" {
     {
       "Effect": "Allow",
       "Action": [
-        "ec2:DescribeSecurityGroups"
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVpcs"
       ],
       "Resource": ["*"]
     }
