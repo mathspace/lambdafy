@@ -49,6 +49,13 @@ resource "aws_iam_user_policy" "lambdafy" {
         "ecr:GetAuthorizationToken"
       ],
       "Resource": ["*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeSecurityGroups"
+      ],
+      "Resource": ["*"]
     }
   ]
 }
