@@ -199,7 +199,7 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 
 	log.Print("waiting for function to return non 5xx")
 
-	errInst := fmt.Sprintf("Check staging endpoint '%s' and review logs by running 'lambdafy logs -s 15 -v %d %s'", preactiveFnURL, version, fnName)
+	errInst := fmt.Sprintf("Check staging endpoint '%s' and review logs by running 'lambdafy logs -s 15m -v %d %s'", preactiveFnURL, version, fnName)
 
 	// Run with 1 concurrency first to ensure function doesn't make debugging hard
 	// by producing too many log entries.
