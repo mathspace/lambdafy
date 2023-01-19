@@ -36,7 +36,6 @@ image: ubuntu
 # 'XXXX' is the MD5 sum of the policies. You can add additional policy
 # using role_extra_policy.
 role: generate
-
 # role_extra_policy allows specifying extra policy statements when using
 # 'role: generate'.
 #
@@ -78,13 +77,13 @@ role: generate
 # memory specifies the amount of RAM available to lambda function in
 # MBs. Defatuls to 128 and can be up to 10240 in 1 increments.
 #
-# memory: 512
+# memory: 128
 
 # timeout specifies the maximum amount of time in seconds the lambda
 # function is allowed to run. Defaults to 3 and can be up to 900 in 1
 # second increments.
 #
-# timeout: 30
+# timeout: 3
 
 # tags will be applied to the function as regular AWS resource tags.
 # Tag `Name` will be applied by default set to the function name defined
@@ -95,9 +94,10 @@ role: generate
 #   team: data-science
 
 # temp_size is the amount of temporary/ephemeral storage available to
-# each invokation of the function in MB. Defaults to 512.
+# each invokation of the function in MB. This is usually mounted on /tmp while
+# the rest of the filesystem is readonly. Defaults to 512.
 #
-# temp_size: 1024
+# temp_size: 512
 
 # efs_mounts is the list of AWS Elastic File System mounts.
 #
@@ -106,7 +106,8 @@ role: generate
 #     path: /mnt/database  # Mount path inside the function
 
 # Needed to allow the function to talk to resources running inside a
-# VPC.
+# VPC. VPC ID is unnecessary and it's automatically inferred based on the
+# subnets.
 #
 # vpc_security_group_ids:
 #   - "sg-1234678"
@@ -122,7 +123,7 @@ role: generate
 
 # allowed_account_regions is a list of account:region that specify which
 # AWS account and region combinations are allowed to be deployed to.
-# This ensures accidental overwrites do not happen. Wildcards can be
+# This ensures accidental overwrites do not happen. Shell style wildcards can be
 # used for both account and region parts.
 # If unspecified, all regions and all accounts are allowed.
 #
