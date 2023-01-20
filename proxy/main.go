@@ -51,7 +51,7 @@ func init() {
 	endpoint = "127.0.0.1:" + strconv.Itoa(port)
 }
 
-// handler is a generic handler for all Lambda events supported by this function.
+// handle is a generic handler for all Lambda events supported by this function.
 func handle(ctx context.Context, e map[string]json.RawMessage) (any, error) {
 
 	// Once started channel is closed, this will unblock for all future requests.
