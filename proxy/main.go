@@ -5,8 +5,10 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -15,12 +17,13 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	sqs "github.com/aws/aws-sdk-go-v2/service/sqs"
 	_ "github.com/oxplot/starenv/autoload"
 )
 
@@ -29,7 +32,6 @@ const lambdafyEnvPrefix = "LAMBDAFY_"
 var (
 	port     int    // port that proxy will proxy requests to
 	endpoint string // end point that proxy will proxy requests to
-	verbose  = os.Getenv(lambdafyEnvPrefix+"PROXY_LOGGING") == "verbose"
 	inLambda = os.Getenv("AWS_LAMBDA_FUNCTION_VERSION") != "" && os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" && os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != ""
 	reqCount int32
 	started  = make(chan struct{})
@@ -48,17 +50,103 @@ func init() {
 	endpoint = "127.0.0.1:" + strconv.Itoa(port)
 }
 
-// handler is the Lambda function handler
-func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPResponse, err error) {
+// handler is a generic handler for all Lambda events supported by this function.
+func handle(ctx context.Context, e map[string]json.RawMessage) (any, error) {
 
 	// Once started channel is closed, this will unblock for all future requests.
 	<-started
 
-	reqNum := atomic.AddInt32(&reqCount, 1)
+	b, _ := json.Marshal(e)
 
-	if verbose {
-		log.Printf("incoming req #%d : %#v", reqNum, req)
+	if _, ok := e["Records"]; ok { // SQS event
+		var sqsEvent events.SQSEvent
+		if err := json.Unmarshal(b, &sqsEvent); err != nil {
+			return nil, err
+		}
+		handleSQS(ctx, sqsEvent)
+		return nil, nil
+
+	} else if _, ok := e["HTTPMethod"]; ok {
+		var httpEvent events.APIGatewayV2HTTPRequest
+		if err := json.Unmarshal(b, &httpEvent); err != nil {
+			return nil, err
+		}
+		return handleHTTP(ctx, httpEvent)
 	}
+
+	return nil, fmt.Errorf("event type %v not supported by this lambda function", e)
+}
+
+// handleSQS handles SQS events and translates them to HTTP requests to the user
+// program. The events are sent as POST requests to /_lambdafy/sqs with the SQS
+// event body as the HTTP payload. A 2xx response from the user program is
+// considered a success and the event is deleted from the queue. A non-2xx
+// response is considered a failure and the event is left in the queue for
+// retry.
+func handleSQS(ctx context.Context, e events.SQSEvent) {
+
+	// We remove messages from the queue ourselves instead of returning failure
+	// responses. Any message not deleted will be retried by SQS.
+
+	c, err := awsconfig.LoadDefaultConfig(context.Background())
+	if err != nil {
+		log.Printf("error loading AWS config: %v", err)
+		return
+	}
+	sqsCl := sqs.NewFromConfig(c)
+
+	// Make n simultaneous requests to the user program to process the SQS records
+	// in the batch. To avoid overwhelming the user program, ensure the event source
+	// is configured with small batch sizes.
+
+	for _, r := range e.Records {
+		go func(r events.SQSMessage) {
+
+			// Build standard HTTP request from the SQS event
+
+			u, _ := url.Parse(fmt.Sprintf("http://%s/_lambdafy/sqs", endpoint))
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), strings.NewReader(r.Body))
+			if err != nil {
+				log.Printf("error creating HTTP request for SQS msg %s: %v", r.MessageId, err)
+				return
+			}
+			resp, err := client.Do(req)
+			if err != nil {
+				log.Printf("error sending HTTP request for SQS msg %s: %v", r.MessageId, err)
+				return
+			}
+			defer resp.Body.Close()
+
+			// If success, delete the message from the queue.
+
+			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				_, err := sqsCl.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+					QueueUrl:      &r.EventSourceARN,
+					ReceiptHandle: &r.ReceiptHandle,
+				})
+				if err != nil {
+					log.Printf("error deleting processed SQS msg %s: %v", r.MessageId, err)
+				}
+				return
+			}
+
+			// If failed, log the response status and body
+
+			log.Printf("failed to process SQS msg %s: %s", r.MessageId, resp.Status)
+			b, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				log.Printf("error reading response body for SQS msg %s: %v", r.MessageId, err)
+				return
+			}
+			log.Print(string(b))
+
+		}(r)
+	}
+}
+
+// handleHTTP handles API Gateway HTTP events and translates them to HTTP
+// requests to the user program.
+func handleHTTP(ctx context.Context, req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPResponse, err error) {
 
 	// Build standard HTTP request from the API Gateway request
 
@@ -80,7 +168,7 @@ func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPRes
 	}
 	u, _ := url.Parse(fmt.Sprintf("http://%s%s%s", endpoint, req.RawPath, req.RawQueryString))
 
-	r, err := http.NewRequest(req.RequestContext.HTTP.Method, u.String(), strings.NewReader(body))
+	r, err := http.NewRequestWithContext(ctx, req.RequestContext.HTTP.Method, u.String(), strings.NewReader(body))
 	if err != nil {
 		return
 	}
@@ -101,10 +189,6 @@ func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPRes
 		}
 	}
 
-	if verbose {
-		log.Printf("proxied req #%d : %#v", reqNum, r)
-	}
-
 	s, err := client.Do(r)
 	if err != nil {
 		return
@@ -116,10 +200,6 @@ func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPRes
 	resBody, err := io.ReadAll(s.Body)
 	if err != nil {
 		return
-	}
-
-	if verbose {
-		log.Printf("proxied res #%d : %#v", reqNum, s)
 	}
 
 	res.Headers = map[string]string{}
@@ -152,10 +232,6 @@ func handler(req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPRes
 		}
 	}
 
-	if verbose {
-		log.Printf("outgoing res #%d : %#v", reqNum, res)
-	}
-
 	return
 }
 
@@ -175,9 +251,6 @@ func run() (exitCode int, err error) {
 	}
 
 	if !inLambda {
-		if verbose {
-			log.Print("not running in lambda, exec the command directly")
-		}
 		path, err := exec.LookPath(cmdName)
 		if err != nil {
 			return 1, fmt.Errorf("cannot find command '%s': %w", cmdName, err)
@@ -203,7 +276,7 @@ func run() (exitCode int, err error) {
 
 	go func() {
 		defer close(lambdaStopped)
-		lambda.StartWithContext(ctx, handler)
+		lambda.StartWithContext(ctx, handle)
 	}()
 
 	// Set/override the PORT env var
