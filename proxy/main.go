@@ -117,6 +117,7 @@ func handleSQS(ctx context.Context, e events.SQSEvent) {
 				log.Printf("error creating HTTP request for SQS msg %s: %v", r.MessageId, err)
 				return
 			}
+			req.Header.Add("Content-Length", strconv.Itoa(len(r.Body)))
 			resp, err := client.Do(req)
 			if err != nil {
 				log.Printf("error sending HTTP request for SQS msg %s: %v", r.MessageId, err)
