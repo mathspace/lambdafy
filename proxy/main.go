@@ -103,8 +103,8 @@ func handleSQS(ctx context.Context, e events.SQSEvent) {
 	sqsCl := sqs.NewFromConfig(c)
 
 	// Make n simultaneous requests to the user program to process the SQS records
-	// in the batch. To avoid overwhelming the user program, ensure the event source
-	// is configured with small batch sizes.
+	// in the batch. To avoid overwhelming the user program, ensure the trigger is
+	// configured with small batch sizes.
 
 	for _, r := range e.Records {
 		go func(r events.SQSMessage) {

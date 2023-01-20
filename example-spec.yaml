@@ -121,6 +121,18 @@ role: generate
 #
 # cors: false
 
+# sqs_triggers define the list of SQS queues to trigger the function.
+# When a message arrives in the queue, the lambdafy proxy will send a POST HTTP
+# request to /_lambdafy/sqs path with the body set to the SQS message body.
+# A 2xx/3xx response is considered a success and the message is deleted from the
+# queue. Any other response is considered a failure and the message is left in
+# the queue. When batch size is greater than 1, batch_size concurrent HTTP
+# requests will be made.
+#
+# sqs_triggers:
+#   - arn: arn:aws:sqs:us-east-1:123456789012:my-queue
+#     batch_size: 1
+
 # allowed_account_regions is a list of account:region that specify which
 # AWS account and region combinations are allowed to be deployed to.
 # This ensures accidental overwrites do not happen. Shell style wildcards can be

@@ -115,7 +115,7 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 	}
 	spec.TempSize = gfo.Configuration.EphemeralStorage.Size
 
-	// Get SQS event sources
+	// Get SQS triggers
 
 	esmpag := lambda.NewListEventSourceMappingsPaginator(lambdaCl, &lambda.ListEventSourceMappingsInput{
 		FunctionName: &fnName,
@@ -123,24 +123,24 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 	for esmpag.HasMorePages() {
 		esmp, err := esmpag.NextPage(ctx)
 		if err != nil {
-			return spec, fmt.Errorf("failed to list event source mappings: %s", err)
+			return spec, fmt.Errorf("failed to list sqs triggers: %s", err)
 		}
 		for _, esm := range esmp.EventSourceMappings {
 			if !strings.HasPrefix(*esm.EventSourceArn, "arn:aws:sqs:") {
 				continue
 			}
-			es := fnspec.SQSEventSource{
-				ARN:          *esm.EventSourceArn,
-				MaxBatchSize: esm.BatchSize,
-				BatchWindow:  esm.MaximumBatchingWindowInSeconds,
+			es := fnspec.SQSTrigger{
+				ARN:         *esm.EventSourceArn,
+				BatchSize:   esm.BatchSize,
+				BatchWindow: esm.MaximumBatchingWindowInSeconds,
 			}
 			if esm.ScalingConfig != nil {
-				es.MaxConcurrency = esm.ScalingConfig.MaximumConcurrency
+				es.Concurrency = esm.ScalingConfig.MaximumConcurrency
 			}
-			if es.MaxBatchSize == nil {
-				es.MaxBatchSize = aws.Int32(10)
+			if es.BatchSize == nil {
+				es.BatchSize = aws.Int32(10)
 			}
-			spec.SQSEventSources = append(spec.SQSEventSources, es)
+			spec.SQSTriggers = append(spec.SQSTriggers, es)
 		}
 	}
 

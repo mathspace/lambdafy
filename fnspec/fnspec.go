@@ -31,12 +31,12 @@ type RolePolicy struct {
 	Resource []string `yaml:"resource" json:"Resource"`
 }
 
-// SQSEventSource represents an SQS event source for a lambda function.
-type SQSEventSource struct {
-	ARN            string `yaml:"arn"`
-	MaxBatchSize   *int32 `yaml:"max_batch_size,omitempty"`
-	MaxConcurrency *int32 `yaml:"max_concurrency,omitempty"`
-	BatchWindow    *int32 `yaml:"batch_window,omitempty"`
+// SQSTrigger represents an SQS trigger for a lambda function.
+type SQSTrigger struct {
+	ARN         string `yaml:"arn"`
+	BatchSize   *int32 `yaml:"batch_size,omitempty"`
+	BatchWindow *int32 `yaml:"batch_window,omitempty"`
+	Concurrency *int32 `yaml:"concurrency,omitempty"`
 }
 
 // Spec is the specification of a lambda function.
@@ -61,7 +61,7 @@ type Spec struct {
 	TempSize              *int32            `yaml:"temp_size,omitempty"`
 	AllowedAccountRegions []string          `yaml:"allowed_account_regions,omitempty"`
 	CORS                  bool              `yaml:"cors,omitempty"`
-	SQSEventSources       []SQSEventSource  `yaml:"sqs_event_sources,omitempty"`
+	SQSTriggers           []SQSTrigger      `yaml:"sqs_triggers,omitempty"`
 	allowedGlobs          []glob.Glob       `yaml:"-"`
 }
 
@@ -149,25 +149,25 @@ func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 		}
 	}
 
-	for _, s := range s.SQSEventSources {
+	for _, s := range s.SQSTriggers {
 		if s.ARN == "" {
 			return nil, errors.New("sqs_event_sources must have an arn")
 		}
-		if s.MaxBatchSize == nil {
+		if s.BatchSize == nil {
 			bs := int32(1)
-			s.MaxBatchSize = &bs
+			s.BatchSize = &bs
 		}
-		if *s.MaxBatchSize < 1 || *s.MaxBatchSize > 10000 {
+		if *s.BatchSize < 1 || *s.BatchSize > 10000 {
 			return nil, errors.New("sqs_event_sources max_batch_size must be between 1 and 10000")
 		}
 		if s.BatchWindow != nil && (*s.BatchWindow < 0 || *s.BatchWindow > 300) {
 			return nil, errors.New("sqs_event_sources batch_window must be between 0 and 300")
 		}
-		if *s.MaxBatchSize >= 10 && s.BatchWindow == nil {
+		if *s.BatchSize >= 10 && s.BatchWindow == nil {
 			bw := int32(1)
 			s.BatchWindow = &bw
 		}
-		if s.MaxConcurrency != nil && (*s.MaxConcurrency < 2 || *s.MaxConcurrency > 1000) {
+		if s.Concurrency != nil && (*s.Concurrency < 2 || *s.Concurrency > 1000) {
 			return nil, errors.New("sqs_event_sources max_concurrency must be between 2 and 1000")
 		}
 	}
