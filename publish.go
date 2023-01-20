@@ -28,7 +28,7 @@ import (
 
 var publishCmd *cobra.Command
 
-var defaultRolePolicyStatements = []fnspec.RolePolicy{
+var defaultRolePolicyStatements = []*fnspec.RolePolicy{
 	{
 		Effect: "Allow",
 		Action: []string{
@@ -463,8 +463,8 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 // serializeRolePolicy serializes the role policy statements into a JSON string,
 // in the format expected by AWS.
-func serializeRolePolicy(extra []fnspec.RolePolicy) (string, error) {
-	var policy []fnspec.RolePolicy
+func serializeRolePolicy(extra []*fnspec.RolePolicy) (string, error) {
+	var policy []*fnspec.RolePolicy
 	policy = append(policy, defaultRolePolicyStatements...)
 	policy = append(policy, extra...)
 	w := strings.Builder{}
@@ -472,7 +472,7 @@ func serializeRolePolicy(extra []fnspec.RolePolicy) (string, error) {
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(struct {
 		Version   string
-		Statement []fnspec.RolePolicy
+		Statement []*fnspec.RolePolicy
 	}{
 		Version:   "2012-10-17",
 		Statement: policy,

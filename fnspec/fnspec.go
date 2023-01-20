@@ -45,7 +45,7 @@ type Spec struct {
 	Description           string            `yaml:"description,omitempty"`
 	Image                 string            `yaml:"image"`
 	Role                  string            `yaml:"role"`
-	RoleExtraPolicy       []RolePolicy      `yaml:"role_extra_policy,omitempty"`
+	RoleExtraPolicy       []*RolePolicy     `yaml:"role_extra_policy,omitempty"`
 	CreateRepo            *bool             `yaml:"create_repo,omitempty"`
 	RepoName              string            `yaml:"repo_name,omitempty"`
 	Env                   map[string]string `yaml:"env,omitempty"`
@@ -57,11 +57,11 @@ type Spec struct {
 	Tags                  map[string]string `yaml:"tags,omitempty"`
 	VPCSecurityGroupIds   []string          `yaml:"vpc_security_group_ids,omitempty"`
 	VPCSubnetIds          []string          `yaml:"vpc_subnet_ids,omitempty"`
-	EFSMounts             []EFSMount        `yaml:"efs_mounts,omitempty"`
+	EFSMounts             []*EFSMount       `yaml:"efs_mounts,omitempty"`
 	TempSize              *int32            `yaml:"temp_size,omitempty"`
 	AllowedAccountRegions []string          `yaml:"allowed_account_regions,omitempty"`
 	CORS                  bool              `yaml:"cors,omitempty"`
-	SQSTriggers           []SQSTrigger      `yaml:"sqs_triggers,omitempty"`
+	SQSTriggers           []*SQSTrigger     `yaml:"sqs_triggers,omitempty"`
 	allowedGlobs          []glob.Glob       `yaml:"-"`
 }
 

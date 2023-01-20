@@ -108,7 +108,7 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 		sort.StringSlice(spec.VPCSubnetIds).Sort()
 	}
 	for _, fsc := range gfo.Configuration.FileSystemConfigs {
-		spec.EFSMounts = append(spec.EFSMounts, fnspec.EFSMount{
+		spec.EFSMounts = append(spec.EFSMounts, &fnspec.EFSMount{
 			ARN:  *fsc.Arn,
 			Path: *fsc.LocalMountPath,
 		})
@@ -140,7 +140,7 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 			if es.BatchSize == nil {
 				es.BatchSize = aws.Int32(10)
 			}
-			spec.SQSTriggers = append(spec.SQSTriggers, es)
+			spec.SQSTriggers = append(spec.SQSTriggers, &es)
 		}
 	}
 
@@ -199,7 +199,7 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 		}
 
 		policies := struct {
-			Statement []fnspec.RolePolicy
+			Statement []*fnspec.RolePolicy
 		}{}
 		if err := json.Unmarshal([]byte(polDoc), &policies); err != nil {
 			return fmt.Errorf("failed to decode role policy: %s", err)
