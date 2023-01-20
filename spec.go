@@ -118,7 +118,7 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 	// Get SQS triggers
 
 	esmpag := lambda.NewListEventSourceMappingsPaginator(lambdaCl, &lambda.ListEventSourceMappingsInput{
-		FunctionName: &fnName,
+		FunctionName: aws.String(fmt.Sprintf("%s:%d", fnName, fnVersion)),
 	})
 	for esmpag.HasMorePages() {
 		esmp, err := esmpag.NextPage(ctx)

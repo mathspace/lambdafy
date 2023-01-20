@@ -59,9 +59,9 @@ type Spec struct {
 	VPCSubnetIds          []string          `yaml:"vpc_subnet_ids,omitempty"`
 	EFSMounts             []*EFSMount       `yaml:"efs_mounts,omitempty"`
 	TempSize              *int32            `yaml:"temp_size,omitempty"`
-	AllowedAccountRegions []string          `yaml:"allowed_account_regions,omitempty"`
 	CORS                  bool              `yaml:"cors,omitempty"`
 	SQSTriggers           []*SQSTrigger     `yaml:"sqs_triggers,omitempty"`
+	AllowedAccountRegions []string          `yaml:"allowed_account_regions,omitempty"`
 	allowedGlobs          []glob.Glob       `yaml:"-"`
 }
 
