@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -131,11 +132,18 @@ func sqsAdd(fnName, arn string, batchSize int) error {
 	}
 
 	if len(src) == 1 {
-		if _, err = lambdaCl.UpdateEventSourceMapping(ctx, &lambda.UpdateEventSourceMappingInput{
-			UUID:      &src[0].UUID,
-			BatchSize: aws.Int32(int32(batchSize)),
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if err := retryOnResourceConflict(ctx, func() error {
+			if _, err = lambdaCl.UpdateEventSourceMapping(ctx, &lambda.UpdateEventSourceMappingInput{
+				UUID:      &src[0].UUID,
+				BatchSize: aws.Int32(int32(batchSize)),
+			}); err != nil {
+				return fmt.Errorf("failed to update event source mapping: %s", err)
+			}
+			return nil
 		}); err != nil {
-			return fmt.Errorf("failed to update event source mapping: %s", err)
+			return err
 		}
 	} else {
 		if _, err = lambdaCl.CreateEventSourceMapping(ctx, &lambda.CreateEventSourceMappingInput{
