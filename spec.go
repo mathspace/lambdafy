@@ -115,6 +115,35 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 	}
 	spec.TempSize = gfo.Configuration.EphemeralStorage.Size
 
+	// Get SQS event sources
+
+	esmpag := lambda.NewListEventSourceMappingsPaginator(lambdaCl, &lambda.ListEventSourceMappingsInput{
+		FunctionName: &fnName,
+	})
+	for esmpag.HasMorePages() {
+		esmp, err := esmpag.NextPage(ctx)
+		if err != nil {
+			return spec, fmt.Errorf("failed to list event source mappings: %s", err)
+		}
+		for _, esm := range esmp.EventSourceMappings {
+			if !strings.HasPrefix(*esm.EventSourceArn, "arn:aws:sqs:") {
+				continue
+			}
+			es := fnspec.SQSEventSource{
+				ARN:          *esm.EventSourceArn,
+				MaxBatchSize: esm.BatchSize,
+				BatchWindow:  esm.MaximumBatchingWindowInSeconds,
+			}
+			if esm.ScalingConfig != nil {
+				es.MaxConcurrency = esm.ScalingConfig.MaximumConcurrency
+			}
+			if es.MaxBatchSize == nil {
+				es.MaxBatchSize = aws.Int32(10)
+			}
+			spec.SQSEventSources = append(spec.SQSEventSources, es)
+		}
+	}
+
 	// Derive allowed account regions from current account and region.
 
 	stsCl := sts.NewFromConfig(acfg)
