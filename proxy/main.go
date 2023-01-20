@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -106,8 +107,12 @@ func handleSQS(ctx context.Context, e events.SQSEvent) {
 	// in the batch. To avoid overwhelming the user program, ensure the trigger is
 	// configured with small batch sizes.
 
+	wg := sync.WaitGroup{}
+	wg.Add(len(e.Records))
+
 	for _, r := range e.Records {
 		go func(r events.SQSMessage) {
+			defer wg.Done()
 
 			// Build standard HTTP request from the SQS event
 
@@ -150,6 +155,8 @@ func handleSQS(ctx context.Context, e events.SQSEvent) {
 
 		}(r)
 	}
+
+	wg.Wait()
 }
 
 // handleHTTP handles API Gateway HTTP events and translates them to HTTP
