@@ -81,6 +81,7 @@ func main() {
 	app.AddCommand(publishCmd)
 	app.AddCommand(pushCmd)
 	app.AddCommand(specCmd)
+	app.AddCommand(sqsCmd)
 	app.AddCommand(unaliasCmd)
 	app.AddCommand(undeployCmd)
 	app.AddCommand(versionsCmd)
