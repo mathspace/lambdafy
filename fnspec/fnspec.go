@@ -31,6 +31,14 @@ type RolePolicy struct {
 	Resource []string `yaml:"resource" json:"Resource"`
 }
 
+// SQSEventSource represents an SQS event source for a lambda function.
+type SQSEventSource struct {
+	ARN            string `yaml:"arn"`
+	MaxBatchSize   *int32 `yaml:"max_batch_size,omitempty"`
+	MaxConcurrency *int32 `yaml:"max_concurrency,omitempty"`
+	BatchWindow    *int32 `yaml:"batch_window,omitempty"`
+}
+
 // Spec is the specification of a lambda function.
 type Spec struct {
 	Name                  string            `yaml:"name"`
@@ -53,6 +61,7 @@ type Spec struct {
 	TempSize              *int32            `yaml:"temp_size,omitempty"`
 	AllowedAccountRegions []string          `yaml:"allowed_account_regions,omitempty"`
 	CORS                  bool              `yaml:"cors,omitempty"`
+	SQSEventSources       []SQSEventSource  `yaml:"sqs_event_sources,omitempty"`
 	allowedGlobs          []glob.Glob       `yaml:"-"`
 }
 
@@ -117,6 +126,7 @@ func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 	if s.TempSize != nil && (*s.TempSize < 512 || *s.TempSize > 10240) {
 		return nil, errors.New("temp_size spec must be between 512 and 10240")
 	}
+
 	for _, a := range s.AllowedAccountRegions {
 		g, err := glob.Compile(a, ':')
 		if err != nil {
@@ -124,6 +134,7 @@ func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 		}
 		s.allowedGlobs = append(s.allowedGlobs, g)
 	}
+
 	if ecrRepoPat.MatchString(s.Image) {
 		if s.RepoName != "" || s.CreateRepo != nil {
 			return nil, errors.New("repo_name and create_repo can only be used with non-ECR docker images")
@@ -137,9 +148,34 @@ func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 			s.RepoName = s.Name
 		}
 	}
+
+	for _, s := range s.SQSEventSources {
+		if s.ARN == "" {
+			return nil, errors.New("sqs_event_sources must have an arn")
+		}
+		if s.MaxBatchSize == nil {
+			bs := int32(1)
+			s.MaxBatchSize = &bs
+		}
+		if *s.MaxBatchSize < 1 || *s.MaxBatchSize > 10000 {
+			return nil, errors.New("sqs_event_sources max_batch_size must be between 1 and 10000")
+		}
+		if s.BatchWindow != nil && (*s.BatchWindow < 0 || *s.BatchWindow > 300) {
+			return nil, errors.New("sqs_event_sources batch_window must be between 0 and 300")
+		}
+		if *s.MaxBatchSize >= 10 && s.BatchWindow == nil {
+			bw := int32(1)
+			s.BatchWindow = &bw
+		}
+		if s.MaxConcurrency != nil && (*s.MaxConcurrency < 2 || *s.MaxConcurrency > 1000) {
+			return nil, errors.New("sqs_event_sources max_concurrency must be between 2 and 1000")
+		}
+	}
+
 	if !strings.Contains(s.Image, ":") {
 		s.Image += ":latest"
 	}
+
 	return &s, nil
 }
 

@@ -406,6 +406,27 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 			return res, fmt.Errorf("failed to update function code: %s", err)
 		}
 
+		// Add SQS event sources
+
+		for _, s := range spec.SQSEventSources {
+			var scal *lambdatypes.ScalingConfig
+			if s.MaxConcurrency != nil {
+				scal = &lambdatypes.ScalingConfig{
+					MaximumConcurrency: s.MaxConcurrency,
+				}
+			}
+			if _, err = lambdaCl.CreateEventSourceMapping(ctx, &lambda.CreateEventSourceMappingInput{
+				EventSourceArn:                 &s.ARN,
+				FunctionName:                   aws.String(fmt.Sprintf("%s:%s", spec.Name, res.Version)),
+				BatchSize:                      s.MaxBatchSize,
+				MaximumBatchingWindowInSeconds: s.BatchWindow,
+				ScalingConfig:                  scal,
+				Enabled:                        aws.Bool(false),
+			}); err != nil {
+				return res, fmt.Errorf("failed to add SQS event source: %s", err)
+			}
+		}
+
 		// Re-tag the function
 
 		if _, err := lambdaCl.TagResource(ctx, &lambda.TagResourceInput{
