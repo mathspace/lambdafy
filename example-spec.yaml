@@ -129,6 +129,12 @@ role: generate
 # the queue. When batch size is greater than 1, batch_size concurrent HTTP
 # requests will be made.
 #
+# GOTCHA: When deploying, SQS triggers of old versions is first disabled and
+# then the triggers for the deploying version is enabled, before HTTP traffic is
+# routed to the new version. This means that /_lambdafy/sqs endpoint should be
+# able to process old messages (which may have different schemas) as well as new
+# ones.
+#
 # sqs_triggers:
 #   - arn: arn:aws:sqs:us-east-1:123456789012:my-queue
 #     batch_size: 1
