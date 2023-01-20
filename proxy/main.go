@@ -56,6 +56,13 @@ func handle(ctx context.Context, e map[string]json.RawMessage) (any, error) {
 	// Once started channel is closed, this will unblock for all future requests.
 	<-started
 
+	// Flush stdout and stderr before returning to ensure the logs are captured by
+	// AWS.
+	defer func() {
+		os.Stdout.Sync()
+		os.Stderr.Sync()
+	}()
+
 	b, _ := json.Marshal(e)
 
 	if _, ok := e["Records"]; ok { // SQS event
@@ -66,7 +73,7 @@ func handle(ctx context.Context, e map[string]json.RawMessage) (any, error) {
 		handleSQS(ctx, sqsEvent)
 		return nil, nil
 
-	} else if _, ok := e["HTTPMethod"]; ok {
+	} else if _, ok := e["rawQueryString"]; ok {
 		var httpEvent events.APIGatewayV2HTTPRequest
 		if err := json.Unmarshal(b, &httpEvent); err != nil {
 			return nil, err
