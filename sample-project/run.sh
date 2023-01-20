@@ -7,7 +7,7 @@ set -euo pipefail
 
 echo "=> Build the docker image" >&2
 
-docker build -t lambdafy-sample-project .
+docker build --platform=linux/amd64 -t lambdafy-sample-project .
 
 echo "=> Lambdafy, push and publish a new version of the function (create if needed)" >&2
 
