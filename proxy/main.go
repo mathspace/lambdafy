@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	sqs "github.com/aws/aws-sdk-go-v2/service/sqs"
 	_ "github.com/oxplot/starenv/autoload"
@@ -85,6 +87,13 @@ func handle(ctx context.Context, e map[string]json.RawMessage) (any, error) {
 	return nil, fmt.Errorf("event type %v not supported by this lambda function", e)
 }
 
+var sqsARNPat = regexp.MustCompile(`^arn:aws:sqs:([^:]+):([^:]+):(.+)$`)
+
+func getSQSQueueURL(arn string) string {
+	m := sqsARNPat.FindStringSubmatch(arn)
+	return fmt.Sprintf("https://sqs.%s.amazonaws.com/%s/%s", m[1], m[2], m[3])
+}
+
 // handleSQS handles SQS events and translates them to HTTP requests to the user
 // program. The events are sent as POST requests to /_lambdafy/sqs with the SQS
 // event body as the HTTP payload. A 2xx response from the user program is
@@ -134,7 +143,7 @@ func handleSQS(ctx context.Context, e events.SQSEvent) {
 
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 				_, err := sqsCl.DeleteMessage(ctx, &sqs.DeleteMessageInput{
-					QueueUrl:      &r.EventSourceARN,
+					QueueUrl:      aws.String(getSQSQueueURL(r.EventSourceARN)),
 					ReceiptHandle: &r.ReceiptHandle,
 				})
 				if err != nil {
