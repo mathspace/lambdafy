@@ -91,6 +91,9 @@ var sqsARNPat = regexp.MustCompile(`^arn:aws:sqs:([^:]+):([^:]+):(.+)$`)
 
 func getSQSQueueURL(arn string) string {
 	m := sqsARNPat.FindStringSubmatch(arn)
+	if m == nil {
+		return "INVALID ARN"
+	}
 	return fmt.Sprintf("https://sqs.%s.amazonaws.com/%s/%s", m[1], m[2], m[3])
 }
 
