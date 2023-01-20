@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -49,7 +50,7 @@ func init() {
 	removeAllCmd := &cobra.Command{
 		Use:   "remove-all function-name",
 		Short: "Remove all SQS event source",
-		Args:  cobra.ExactArgs(2),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			return sqsRemove(args[0], "")
 		},
@@ -139,11 +140,11 @@ func sqsAdd(fnName, arn string, batchSize int) error {
 				UUID:      &src[0].UUID,
 				BatchSize: aws.Int32(int32(batchSize)),
 			}); err != nil {
-				return fmt.Errorf("failed to update event source mapping: %s", err)
+				return err
 			}
 			return nil
 		}); err != nil {
-			return err
+			return fmt.Errorf("failed to update event source mapping: %s", err)
 		}
 	} else {
 		if _, err = lambdaCl.CreateEventSourceMapping(ctx, &lambda.CreateEventSourceMappingInput{
@@ -176,10 +177,19 @@ func sqsRemove(fnName, arn string) error {
 		if arn != "" && m.ARN != arn {
 			continue
 		}
-		if _, err = lambdaCl.DeleteEventSourceMapping(ctx, &lambda.DeleteEventSourceMappingInput{
-			UUID: &m.UUID,
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if err := retryOnResourceConflict(ctx, func() error {
+			if _, err = lambdaCl.DeleteEventSourceMapping(ctx, &lambda.DeleteEventSourceMappingInput{
+				UUID: &m.UUID,
+			}); err != nil {
+				return err
+			}
+			return nil
 		}); err != nil {
-			return fmt.Errorf("failed to delete event source mapping: %s", err)
+			if !strings.Contains(err.Error(), "ResourceNotFoundException") {
+				return fmt.Errorf("failed to delete event source mapping: %s", err)
+			}
 		}
 	}
 
