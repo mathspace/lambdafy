@@ -243,11 +243,13 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 
 	numVer, err := resolveVersion(fnName, activeAlias)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve version for alias '%s': %s", activeAlias, err)
-	}
-
-	if err := enableSQSTriggers(ctx, lambdaCl, fnName, numVer, false); err != nil {
-		return "", fmt.Errorf("failed to disable SQS triggers: %s", err)
+		if !strings.Contains(err.Error(), "ResourceNotFoundException") {
+			return "", fmt.Errorf("failed to resolve version for alias '%s': %s", activeAlias, err)
+		}
+	} else {
+		if err := enableSQSTriggers(ctx, lambdaCl, fnName, numVer, false); err != nil {
+			return "", fmt.Errorf("failed to disable SQS triggers: %s", err)
+		}
 	}
 
 	log.Printf("enabling SQS triggers on deploying version (if any)")
@@ -283,11 +285,16 @@ func undeploy(fnName string) error {
 
 	numVer, err := resolveVersion(fnName, activeAlias)
 	if err != nil {
-		return fmt.Errorf("failed to resolve version for alias '%s': %s", activeAlias, err)
-	}
-
-	if err := enableSQSTriggers(ctx, lambdaCl, fnName, numVer, false); err != nil {
-		return fmt.Errorf("failed to disable SQS triggers: %s", err)
+		if !strings.Contains(err.Error(), "ResourceNotFoundException") {
+			return fmt.Errorf("failed to resolve version for alias '%s': %s", activeAlias, err)
+		}
+	} else {
+		if err := enableSQSTriggers(ctx, lambdaCl, fnName, numVer, false); err != nil {
+			return fmt.Errorf("failed to disable SQS triggers: %s", err)
+		}
+		if err := waitOnFunc(ctx, lambdaCl, fnName, activeAlias); err != nil {
+			return err
+		}
 	}
 
 	log.Print("deleting the function url endpoint")
