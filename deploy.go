@@ -171,6 +171,34 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 	return fnURL, nil
 }
 
+// enableSQSTrigggers enables or disables all SQS triggers for the given function alias.
+func enableSQSTriggers(ctx context.Context, lambdaCl *lambda.Client, fnName string, alias string, state bool) error {
+	ems := lambda.NewListEventSourceMappingsPaginator(lambdaCl, &lambda.ListEventSourceMappingsInput{
+		FunctionName: aws.String(fmt.Sprintf("%s:%s", fnName, alias)),
+	})
+	for ems.HasMorePages() {
+		es, err := ems.NextPage(ctx)
+		if err != nil {
+			return err
+		}
+		for _, em := range es.EventSourceMappings {
+			if !strings.HasPrefix(*em.EventSourceArn, "arn:aws:sqs:") {
+				continue
+			}
+			if err := retryOnResourceConflict(ctx, func() error {
+				_, err := lambdaCl.UpdateEventSourceMapping(ctx, &lambda.UpdateEventSourceMappingInput{
+					UUID:    em.UUID,
+					Enabled: &state,
+				})
+				return err
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // publish publishes the lambda function to AWS and returns the function URL.
 func deploy(fnName string, version int, primeCount int) (string, error) {
 	ctx := context.Background()
@@ -195,8 +223,6 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 		return "", err
 	}
 
-	// Loop until the function returns a [234]XX response.
-
 	log.Print("waiting for function to return non 5xx")
 
 	errInst := fmt.Sprintf("Check staging endpoint '%s' and review logs by running 'lambdafy logs -s 15m -v %d %s'", preactiveFnURL, version, fnName)
@@ -211,9 +237,21 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 		return "", fmt.Errorf("function failed to return non 5xx - aborting deploy: %s\n\n%s", err, errInst)
 	}
 
-	// Prepare active deploy.
+	log.Printf("staging success")
 
-	log.Printf("staging success - deploying to active endpoint")
+	log.Printf("disabling SQS triggers on currently deployed version (if any)")
+
+	if err := enableSQSTriggers(ctx, lambdaCl, fnName, activeAlias, false); err != nil {
+		return "", fmt.Errorf("failed to disable SQS triggers: %s", err)
+	}
+
+	log.Printf("enabling SQS triggers on deploying version (if any)")
+
+	if err := enableSQSTriggers(ctx, lambdaCl, fnName, preactiveAlias, true); err != nil {
+		return "", fmt.Errorf("failed to enable SQS triggers: %s", err)
+	}
+
+	log.Printf("deploying to active endpoint")
 
 	ctxTo, cancel = context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
