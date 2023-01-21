@@ -114,10 +114,11 @@ func processDockerResponse(r io.Reader) error {
 }
 
 // waitOnFunc waits for a lambda function to be ready.
-func waitOnFunc(ctx context.Context, lambdaCl *lambda.Client, fnName string) error {
+func waitOnFunc(ctx context.Context, lambdaCl *lambda.Client, fnName string, verAlias string) error {
 	for {
 		fOut, err := lambdaCl.GetFunction(ctx, &lambda.GetFunctionInput{
 			FunctionName: &fnName,
+			Qualifier:    &verAlias,
 		})
 		if err != nil {
 			return fmt.Errorf("failed poll function state: %s", err)

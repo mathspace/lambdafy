@@ -172,9 +172,9 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 }
 
 // enableSQSTrigggers enables or disables all SQS triggers for the given function alias.
-func enableSQSTriggers(ctx context.Context, lambdaCl *lambda.Client, fnName string, alias string, state bool) error {
+func enableSQSTriggers(ctx context.Context, lambdaCl *lambda.Client, fnName string, version int, state bool) error {
 	ems := lambda.NewListEventSourceMappingsPaginator(lambdaCl, &lambda.ListEventSourceMappingsInput{
-		FunctionName: aws.String(fmt.Sprintf("%s:%s", fnName, alias)),
+		FunctionName: aws.String(fmt.Sprintf("%s:%d", fnName, version)),
 	})
 	for ems.HasMorePages() {
 		es, err := ems.NextPage(ctx)
@@ -241,13 +241,18 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 
 	log.Printf("disabling SQS triggers on currently deployed version (if any)")
 
-	if err := enableSQSTriggers(ctx, lambdaCl, fnName, activeAlias, false); err != nil {
+	numVer, err := resolveVersion(fnName, activeAlias)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve version for alias '%s': %s", activeAlias, err)
+	}
+
+	if err := enableSQSTriggers(ctx, lambdaCl, fnName, numVer, false); err != nil {
 		return "", fmt.Errorf("failed to disable SQS triggers: %s", err)
 	}
 
 	log.Printf("enabling SQS triggers on deploying version (if any)")
 
-	if err := enableSQSTriggers(ctx, lambdaCl, fnName, preactiveAlias, true); err != nil {
+	if err := enableSQSTriggers(ctx, lambdaCl, fnName, version, true); err != nil {
 		return "", fmt.Errorf("failed to enable SQS triggers: %s", err)
 	}
 
@@ -276,7 +281,12 @@ func undeploy(fnName string) error {
 
 	log.Print("disabling SQS triggers")
 
-	if err := enableSQSTriggers(ctx, lambdaCl, fnName, activeAlias, false); err != nil {
+	numVer, err := resolveVersion(fnName, activeAlias)
+	if err != nil {
+		return fmt.Errorf("failed to resolve version for alias '%s': %s", activeAlias, err)
+	}
+
+	if err := enableSQSTriggers(ctx, lambdaCl, fnName, numVer, false); err != nil {
 		return fmt.Errorf("failed to disable SQS triggers: %s", err)
 	}
 

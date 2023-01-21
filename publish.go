@@ -458,7 +458,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 	log.Printf("waiting for function to become ready")
 
-	return res, waitOnFunc(ctx, lambdaCl, spec.Name)
+	return res, waitOnFunc(ctx, lambdaCl, spec.Name, res.Version)
 }
 
 // serializeRolePolicy serializes the role policy statements into a JSON string,
