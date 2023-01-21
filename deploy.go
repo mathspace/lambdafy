@@ -274,6 +274,14 @@ func undeploy(fnName string) error {
 	}
 	lambdaCl := lambda.NewFromConfig(acfg)
 
+	log.Print("disabling SQS triggers")
+
+	if err := enableSQSTriggers(ctx, lambdaCl, fnName, activeAlias, false); err != nil {
+		return fmt.Errorf("failed to disable SQS triggers: %s", err)
+	}
+
+	log.Print("deleting the function url endpoint")
+
 	if err := retryOnResourceConflict(ctx, func() error {
 		_, err := lambdaCl.DeleteAlias(ctx, &lambda.DeleteAliasInput{
 			FunctionName: &fnName,
