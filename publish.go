@@ -331,7 +331,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 		ctxTo, cancel := context.WithTimeout(ctx, 10*time.Minute)
 		defer cancel()
 		if err := retryOnResourceConflict(ctxTo, func() error {
-			r, err := lambdaCl.CreateFunction(ctx, &lambda.CreateFunctionInput{
+			r, err := lambdaCl.CreateFunction(ctxTo, &lambda.CreateFunctionInput{
 				FunctionName:  aws.String(spec.Name),
 				Description:   aws.String(spec.Description),
 				Role:          &roleArn,
