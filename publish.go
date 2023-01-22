@@ -328,33 +328,40 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 		log.Printf("creating new function '%s'", spec.Name)
 
-		r, err := lambdaCl.CreateFunction(ctx, &lambda.CreateFunctionInput{
-			FunctionName:  aws.String(spec.Name),
-			Description:   aws.String(spec.Description),
-			Role:          &roleArn,
-			Architectures: []lambdatypes.Architecture{lambdatypes.ArchitectureX8664},
-			Environment:   &lambdatypes.Environment{Variables: spec.Env},
-			Code: &lambdatypes.FunctionCode{
-				ImageUri: aws.String(spec.Image),
-			},
-			ImageConfig: &lambdatypes.ImageConfig{
-				EntryPoint:       spec.Entrypoint,
-				Command:          spec.Command,
-				WorkingDirectory: spec.WorkDir,
-			},
-			FileSystemConfigs: fsConfig,
-			MemorySize:        spec.Memory,
-			PackageType:       lambdatypes.PackageTypeImage,
-			Publish:           true,
-			Tags:              tags,
-			Timeout:           spec.Timeout,
-			VpcConfig:         vpc,
-		})
-		if err != nil {
+		ctxTo, cancel := context.WithTimeout(ctx, 10*time.Minute)
+		defer cancel()
+		if err := retryOnResourceConflict(ctxTo, func() error {
+			r, err := lambdaCl.CreateFunction(ctx, &lambda.CreateFunctionInput{
+				FunctionName:  aws.String(spec.Name),
+				Description:   aws.String(spec.Description),
+				Role:          &roleArn,
+				Architectures: []lambdatypes.Architecture{lambdatypes.ArchitectureX8664},
+				Environment:   &lambdatypes.Environment{Variables: spec.Env},
+				Code: &lambdatypes.FunctionCode{
+					ImageUri: aws.String(spec.Image),
+				},
+				ImageConfig: &lambdatypes.ImageConfig{
+					EntryPoint:       spec.Entrypoint,
+					Command:          spec.Command,
+					WorkingDirectory: spec.WorkDir,
+				},
+				FileSystemConfigs: fsConfig,
+				MemorySize:        spec.Memory,
+				PackageType:       lambdatypes.PackageTypeImage,
+				Publish:           true,
+				Tags:              tags,
+				Timeout:           spec.Timeout,
+				VpcConfig:         vpc,
+			})
+			if err != nil {
+				return err
+			}
+			res.ARN = *r.FunctionArn
+			res.Version = *r.Version
+			return nil
+		}); err != nil {
 			return res, fmt.Errorf("failed to create function: %s", err)
 		}
-		res.ARN = *r.FunctionArn
-		res.Version = *r.Version
 
 	} else {
 
