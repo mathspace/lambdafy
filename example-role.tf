@@ -45,8 +45,7 @@ resource "aws_iam_user_policy" "lambdafy" {
     {
       "Effect": "Allow",
       "Action": [
-        "ecr:CreateRepository",
-        "ecr:GetAuthorizationToken"
+        "ecr:*"
       ],
       "Resource": ["*"]
     },
