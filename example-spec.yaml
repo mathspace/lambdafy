@@ -58,6 +58,8 @@ role: generate
 #     'Lambdafy-SQS-Group-Id' is set, it will be used as Group ID for the
 #     message. A 2xx/3xx response is considered a success, otherwise a fail. See
 #     the example below for usage.
+#     Note: The necessary IAM role permissions to send SQS messages are added
+#     when using 'role: generate'.
 #
 # - All other values are treated as literals.
 #
