@@ -47,17 +47,26 @@ role: generate
 #       - "*"
 
 # env defines the environmental variables available to the app. The
-# values follow the format for https://pkg.go.dev/github.com/oxplot/starenv
-# In short:
-# - Values starting with asterisk (*) are treated specially.
+# values follow the format for https://pkg.go.dev/github.com/oxplot/starenv :
+#
+# - Values starting with asterisk (*) are treated specially. In addition to all
+#   the starenv derefers, lambdafy adds the following derefers:
+#
+#   - lambdafy_sqs_send: This derefer will be replaced with a URL which when POSTed
+#     to will send a message to the SQS queue whose ARN is specified. The body
+#     of the POST will be sent as the SQS message body. If header
+#     'Lambdafy-SQS-Group-Id' is set, it will be used as Group ID for the
+#     message. A 2xx/3xx response is considered a success, otherwise a fail. See
+#     the example below for usage.
+#
 # - All other values are treated as literals.
 #
 # env:
-#   LAMBDAFY_PROXY_LOGGING: verbose  # Turns on verbose logging of requests
 #   FOO: "bar"
 #   ABC: "123"
 #   API_KEY: "*ssm:/my-great-app/key"
 #   CONFIG: "*s3:app-bucket/path/to/config"
+#   SQS_SEND_URL: "*lambdafy_sqs_send:arn:aws:sqs:us-east-1:123456789012:my-queue"
 
 # entrypoint is analogous to Dockerfile ENTRYPOINT directive. Specifying
 # it will override the existing ENTRYPOINT in the docker image. Note

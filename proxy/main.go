@@ -5,11 +5,13 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -27,14 +29,18 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	sqs "github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/oxplot/starenv"
 	_ "github.com/oxplot/starenv/autoload"
+	"github.com/oxplot/starenv/derefer"
 )
 
 const lambdafyEnvPrefix = "LAMBDAFY_"
 
 var (
-	port     int    // port that proxy will proxy requests to
-	endpoint string // end point that proxy will proxy requests to
+	port        int    // port that proxy will proxy requests to
+	appEndpoint string // end point that proxy will proxy requests to
+	// listen address for our own HTTP server used for proxying to AWS services.
+	listen   string
 	inLambda = os.Getenv("AWS_LAMBDA_FUNCTION_VERSION") != "" && os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" && os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != ""
 	reqCount int32
 	started  = make(chan struct{})
@@ -47,10 +53,12 @@ var (
 )
 
 func init() {
+	rand.Seed(time.Now().UnixNano())
 	// Generate a random port number between 19000 and 19999.
 	// This is to ensure the user program can't depend on hardcoded port numbers.
 	port = 19000 + int(time.Now().UnixNano()%1000)
-	endpoint = "127.0.0.1:" + strconv.Itoa(port)
+	appEndpoint = "127.0.0.1:" + strconv.Itoa(port)
+	listen = "127.0.0.1:" + strconv.Itoa(port+1)
 }
 
 // handle is a generic handler for all Lambda events supported by this function.
@@ -92,7 +100,7 @@ var sqsARNPat = regexp.MustCompile(`^arn:aws:sqs:([^:]+):([^:]+):(.+)$`)
 func getSQSQueueURL(arn string) string {
 	m := sqsARNPat.FindStringSubmatch(arn)
 	if m == nil {
-		return "INVALID ARN"
+		return ""
 	}
 	return fmt.Sprintf("https://sqs.%s.amazonaws.com/%s/%s", m[1], m[2], m[3])
 }
@@ -128,7 +136,7 @@ func handleSQS(ctx context.Context, e events.SQSEvent) {
 
 			// Build standard HTTP request from the SQS event
 
-			u, _ := url.Parse(fmt.Sprintf("http://%s/_lambdafy/sqs", endpoint))
+			u, _ := url.Parse(fmt.Sprintf("http://%s/_lambdafy/sqs", appEndpoint))
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), strings.NewReader(r.Body))
 			if err != nil {
 				log.Printf("error creating HTTP request for SQS msg %s: %v", r.MessageId, err)
@@ -193,7 +201,7 @@ func handleHTTP(ctx context.Context, req events.APIGatewayV2HTTPRequest) (res ev
 	if req.RawQueryString != "" {
 		req.RawQueryString = "?" + req.RawQueryString
 	}
-	u, _ := url.Parse(fmt.Sprintf("http://%s%s%s", endpoint, req.RawPath, req.RawQueryString))
+	u, _ := url.Parse(fmt.Sprintf("http://%s%s%s", appEndpoint, req.RawPath, req.RawQueryString))
 
 	r, err := http.NewRequestWithContext(ctx, req.RequestContext.HTTP.Method, u.String(), strings.NewReader(body))
 	if err != nil {
@@ -262,11 +270,92 @@ func handleHTTP(ctx context.Context, req events.APIGatewayV2HTTPRequest) (res ev
 	return
 }
 
+type sqsSendDerefer map[string]string
+
+func (d sqsSendDerefer) Deref(arn string) (string, error) {
+	// Generate a random string ID.
+	id := make([]byte, 16)
+	_, _ = rand.Read(id)
+	idStr := hex.EncodeToString(id)
+	qURL := getSQSQueueURL(arn)
+	if qURL == "" {
+		return "", fmt.Errorf("invalid SQS ARN: %s", arn)
+	}
+	d[idStr] = qURL
+	return fmt.Sprintf("http://%s/sqs?id=%s", listen, idStr), nil
+}
+
+// sqsIdToQueueURL maps randomly generated IDs to queue URLs. Random IDs
+// ensure the user program cannot rely on the URL staying the same over time.
+var sqsIDToQueueURL = sqsSendDerefer{}
+
+// handleSQSSend handles HTTP POST requests and translates them to SQS send
+// message.
+// Lambdafy-SQS-Group-Id header is used to set the message group ID.
+func handleSQSSend(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	qID := r.URL.Query().Get("id")
+	if qID == "" {
+		http.Error(w, "Missing queue ID", http.StatusBadRequest)
+		return
+	}
+
+	qURL, ok := sqsIDToQueueURL[qID]
+	if !ok {
+		http.Error(w, "Invalid queue ID", http.StatusBadRequest)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Error reading request body", http.StatusInternalServerError)
+		return
+	}
+
+	var groupID *string
+	if g := r.Header.Get("Lambdafy-SQS-Group-Id"); g != "" {
+		groupID = &g
+	}
+
+	c, err := awsconfig.LoadDefaultConfig(context.Background())
+	if err != nil {
+		log.Printf("error loading AWS config: %v", err)
+		http.Error(w, fmt.Sprintf("Error loading AWS config: %v", err), http.StatusInternalServerError)
+		return
+	}
+	sqsCl := sqs.NewFromConfig(c)
+
+	if _, err := sqsCl.SendMessage(context.Background(), &sqs.SendMessageInput{
+		MessageBody:    aws.String(string(body)),
+		QueueUrl:       aws.String(qURL),
+		MessageGroupId: groupID,
+	}); err != nil {
+		log.Printf("error sending SQS message: %v", err)
+		http.Error(w, fmt.Sprintf("Error sending SQS message: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+}
+
 func run() (exitCode int, err error) {
 	if len(os.Args) < 2 {
 		return 127, fmt.Errorf("usage: %s command [arg [arg [...]]]", os.Args[0])
 	}
 	cmdName := os.Args[1]
+
+	// Load env vars/derefence them from various sources
+
+	for t, n := range derefer.NewDefault {
+		starenv.Register(t, &derefer.Lazy{New: n})
+	}
+	starenv.Register("lambdafy_sqs_send", sqsIDToQueueURL)
+
+	if err := starenv.Load(); err != nil {
+		return 1, fmt.Errorf("error loading env vars: %w", err)
+	}
 
 	// Remove all env vars with lambdafy prefix to prevent child process from
 	// depending on them.
@@ -289,7 +378,7 @@ func run() (exitCode int, err error) {
 		return 1, err
 	}
 
-	log.Printf("running in lambda, starting proxying traffic to %s", endpoint)
+	log.Printf("running in lambda, starting proxying traffic to %s", appEndpoint)
 
 	args := os.Args[2:]
 
@@ -305,6 +394,11 @@ func run() (exitCode int, err error) {
 		defer close(lambdaStopped)
 		lambda.StartWithContext(ctx, handle)
 	}()
+
+	// Start own AWS proxy endpoint (used for sending on SQS and other services)
+
+	http.HandleFunc("/sqs", handleSQSSend)
+	go http.ListenAndServe(listen, nil)
 
 	// Set/override the PORT env var
 
@@ -355,7 +449,7 @@ func run() (exitCode int, err error) {
 	log.Printf("waiting for startup request to succeed")
 
 	for {
-		u := "http://" + endpoint + "/"
+		u := "http://" + appEndpoint + "/"
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 		if err != nil {
 			return 1, fmt.Errorf("failed to create startup request: %s", err)
