@@ -239,7 +239,7 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 
 	log.Printf("staging success")
 
-	log.Printf("disabling SQS triggers on currently deployed version (if any)")
+	log.Printf("transitioning sqs triggers to new version asynchronously")
 
 	numVer, err := resolveVersion(fnName, activeAlias)
 	if err != nil {
@@ -251,8 +251,6 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 			return "", fmt.Errorf("failed to disable SQS triggers: %s", err)
 		}
 	}
-
-	log.Printf("enabling SQS triggers on deploying version (if any)")
 
 	if err := enableSQSTriggers(ctx, lambdaCl, fnName, version, true); err != nil {
 		return "", fmt.Errorf("failed to enable SQS triggers: %s", err)
