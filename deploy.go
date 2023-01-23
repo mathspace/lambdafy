@@ -172,7 +172,8 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 }
 
 // enableSQSTrigggers enables or disables all SQS triggers for the given function alias.
-func enableSQSTriggers(ctx context.Context, lambdaCl *lambda.Client, fnName string, version int, state bool) error {
+func enableSQSTriggers(ctx context.Context, lambdaCl *lambda.Client, fnName string, version int, enable bool) error {
+	lst := []lambdatypes.EventSourceMappingConfiguration{}
 	ems := lambda.NewListEventSourceMappingsPaginator(lambdaCl, &lambda.ListEventSourceMappingsInput{
 		FunctionName: aws.String(fmt.Sprintf("%s:%d", fnName, version)),
 	})
@@ -181,21 +182,46 @@ func enableSQSTriggers(ctx context.Context, lambdaCl *lambda.Client, fnName stri
 		if err != nil {
 			return err
 		}
-		for _, em := range es.EventSourceMappings {
-			if !strings.HasPrefix(*em.EventSourceArn, "arn:aws:sqs:") {
-				continue
-			}
-			if err := retryOnResourceConflict(ctx, func() error {
-				_, err := lambdaCl.UpdateEventSourceMapping(ctx, &lambda.UpdateEventSourceMappingInput{
-					UUID:    em.UUID,
-					Enabled: &state,
-				})
-				return err
-			}); err != nil {
-				return err
-			}
+		lst = append(lst, es.EventSourceMappings...)
+	}
+
+	for _, em := range lst {
+		if !strings.HasPrefix(*em.EventSourceArn, "arn:aws:sqs:") {
+			continue
+		}
+		if err := retryOnResourceConflict(ctx, func() error {
+			_, err := lambdaCl.UpdateEventSourceMapping(ctx, &lambda.UpdateEventSourceMappingInput{
+				UUID:    em.UUID,
+				Enabled: &enable,
+			})
+			return err
+		}); err != nil {
+			return err
 		}
 	}
+
+	// Wait for all triggers to be enabled/disabled.
+
+	for {
+		allAtDesiredState := true
+		for _, em := range lst {
+			s, err := lambdaCl.GetEventSourceMapping(ctx, &lambda.GetEventSourceMappingInput{
+				UUID: em.UUID,
+			})
+			if err != nil {
+				return err
+			}
+			if enable && *s.State != "Enabled" || !enable && *s.State != "Disabled" {
+				allAtDesiredState = false
+				break
+			}
+		}
+		if allAtDesiredState {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+
 	return nil
 }
 
@@ -239,7 +265,16 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 
 	log.Printf("staging success")
 
-	log.Printf("transitioning sqs triggers to new version asynchronously")
+	log.Printf("transitioning SQS triggers to new the version")
+
+	// We first enable the SQS triggers for the new version to ensure we are not
+	// left without any message receivers should something fail here.
+
+	sqsCtx, sqsCancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer sqsCancel()
+	if err := enableSQSTriggers(sqsCtx, lambdaCl, fnName, version, true); err != nil {
+		return "", fmt.Errorf("failed to enable SQS triggers: %s", err)
+	}
 
 	numVer, err := resolveVersion(fnName, activeAlias)
 	if err != nil {
@@ -247,13 +282,9 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 			return "", fmt.Errorf("failed to resolve version for alias '%s': %s", activeAlias, err)
 		}
 	} else {
-		if err := enableSQSTriggers(ctx, lambdaCl, fnName, numVer, false); err != nil {
+		if err := enableSQSTriggers(sqsCtx, lambdaCl, fnName, numVer, false); err != nil {
 			return "", fmt.Errorf("failed to disable SQS triggers: %s", err)
 		}
-	}
-
-	if err := enableSQSTriggers(ctx, lambdaCl, fnName, version, true); err != nil {
-		return "", fmt.Errorf("failed to enable SQS triggers: %s", err)
 	}
 
 	log.Printf("deploying to active endpoint")
