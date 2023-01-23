@@ -43,6 +43,7 @@ var defaultRolePolicyStatements = []*fnspec.RolePolicy{
 			"sqs:DeleteMessage",
 			"sqs:GetQueueAttributes",
 			"sqs:ReceiveMessage",
+			"sqs:SendMessage",
 		},
 		Resource: []string{"*"},
 	},
