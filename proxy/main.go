@@ -36,13 +36,13 @@ import (
 const lambdafyEnvPrefix = "LAMBDAFY_"
 
 var (
-	port        int    // port that proxy will proxy requests to
-	appEndpoint string // end point that proxy will proxy requests to
-	// listen address for our own HTTP server used for proxying to AWS services.
-	listen   string
-	inLambda = os.Getenv("AWS_LAMBDA_FUNCTION_VERSION") != "" && os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" && os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != ""
-	reqCount int32
-	started  = make(chan struct{})
+	port            int    // base port for various endpoints
+	appEndpoint     string // end point that proxy will proxy requests to
+	listen          string // listen address for our own HTTP server used for proxying to AWS services.
+	functionName    = os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
+	functionVersion = os.Getenv("AWS_LAMBDA_FUNCTION_VERSION")
+	inLambda        = functionName != "" && functionVersion != "" && os.Getenv("AWS_LAMBDA_RUNTIME_API") != ""
+	started         = make(chan struct{})
 
 	client = &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -96,6 +96,7 @@ func handle(ctx context.Context, e map[string]json.RawMessage) (any, error) {
 
 var sqsARNPat = regexp.MustCompile(`^arn:aws:sqs:([^:]+):([^:]+):(.+)$`)
 
+// getSQSQueueURL returns the URL of the SQS queue given its ARN.
 func getSQSQueueURL(arn string) string {
 	m := sqsARNPat.FindStringSubmatch(arn)
 	if m == nil {
@@ -342,7 +343,11 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("sent an SQS message to '%s'", qURL)
+
 }
+
+const sendSQSStarenvTag = "lambdafy_sqs_send"
 
 func run() (exitCode int, err error) {
 	if len(os.Args) < 2 {
@@ -355,7 +360,7 @@ func run() (exitCode int, err error) {
 	for t, n := range derefer.NewDefault {
 		starenv.Register(t, &derefer.Lazy{New: n})
 	}
-	starenv.Register("lambdafy_sqs_send", sqsIDToQueueURL)
+	starenv.Register(sendSQSStarenvTag, sqsIDToQueueURL)
 
 	if err := starenv.Load(); err != nil {
 		return 1, fmt.Errorf("error loading env vars: %w", err)
