@@ -30,7 +30,6 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	sqs "github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/oxplot/starenv"
-	_ "github.com/oxplot/starenv/autoload"
 	"github.com/oxplot/starenv/derefer"
 )
 
