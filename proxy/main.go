@@ -271,6 +271,9 @@ func handleHTTP(ctx context.Context, req events.APIGatewayV2HTTPRequest) (res ev
 
 type sqsSendDerefer map[string]string
 
+// Deref generates a new random ID and maps it to the queue URL of the given SQS
+// ARN, and adds it to the map. It returns a URL that the user program can use
+// to send messages to the queue.
 func (d sqsSendDerefer) Deref(arn string) (string, error) {
 	// Generate a random string ID.
 	id := make([]byte, 16)
@@ -287,6 +290,8 @@ func (d sqsSendDerefer) Deref(arn string) (string, error) {
 // sqsIdToQueueURL maps randomly generated IDs to queue URLs. Random IDs
 // ensure the user program cannot rely on the URL staying the same over time.
 var sqsIDToQueueURL = sqsSendDerefer{}
+
+const sqsGroupIDHeader = "Lambdafy-SQS-Group-Id"
 
 // handleSQSSend handles HTTP POST requests and translates them to SQS send
 // message.
@@ -315,7 +320,7 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var groupID *string
-	if g := r.Header.Get("Lambdafy-SQS-Group-Id"); g != "" {
+	if g := r.Header.Get(sqsGroupIDHeader); g != "" {
 		groupID = &g
 	}
 
