@@ -183,6 +183,13 @@ func handleSQS(ctx context.Context, e events.SQSEvent) {
 // requests to the user program.
 func handleHTTP(ctx context.Context, req events.APIGatewayV2HTTPRequest) (res events.APIGatewayV2HTTPResponse, err error) {
 
+	// Ignore special /_lambdafy paths
+
+	if strings.HasPrefix(req.RawPath, "/_lambdafy/") {
+		res.StatusCode = http.StatusNotFound
+		return
+	}
+
 	// Build standard HTTP request from the API Gateway request
 
 	body := req.Body
