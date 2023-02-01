@@ -113,6 +113,8 @@ func getSQSQueueURL(arn string) string {
 // retry. If any item in the batch fails,
 func handleSQS(ctx context.Context, e events.SQSEvent) (resp events.SQSEventResponse, err error) {
 
+	log.Printf("processing batch of %d SQS records", len(e.Records))
+
 	type taskResult struct {
 		msgID string
 		err   error
