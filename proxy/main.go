@@ -20,7 +20,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -80,8 +79,7 @@ func handle(ctx context.Context, e map[string]json.RawMessage) (any, error) {
 		if err := json.Unmarshal(b, &sqsEvent); err != nil {
 			return nil, err
 		}
-		handleSQS(ctx, sqsEvent)
-		return nil, nil
+		return handleSQS(ctx, sqsEvent)
 
 	} else if _, ok := e["rawQueryString"]; ok {
 		var httpEvent events.APIGatewayV2HTTPRequest
@@ -107,76 +105,71 @@ func getSQSQueueURL(arn string) string {
 
 // handleSQS handles SQS events and translates them to HTTP requests to the user
 // program. The events are sent as POST requests to /_lambdafy/sqs with the SQS
-// event body as the HTTP payload. A 2xx response from the user program is
-// considered a success and the event is deleted from the queue. A non-2xx
+// event body as the HTTP payload. A 2xx/3xx response from the user program is
+// considered a success and the event is deleted from the queue. A non-2xx/3xx
 // response is considered a failure and the event is left in the queue for
-// retry.
-func handleSQS(ctx context.Context, e events.SQSEvent) {
+// retry. If any item in the batch fails,
+func handleSQS(ctx context.Context, e events.SQSEvent) (resp events.SQSEventResponse, err error) {
 
-	// We remove messages from the queue ourselves instead of returning failure
-	// responses. Any message not deleted will be retried by SQS.
-
-	c, err := awsconfig.LoadDefaultConfig(context.Background())
-	if err != nil {
-		log.Printf("error loading AWS config: %v", err)
-		return
+	type taskResult struct {
+		msgID string
+		err   error
 	}
-	sqsCl := sqs.NewFromConfig(c)
+	taskResults := make(chan taskResult)
 
 	// Make n simultaneous requests to the user program to process the SQS records
 	// in the batch. To avoid overwhelming the user program, ensure the trigger is
 	// configured with small batch sizes.
 
-	wg := sync.WaitGroup{}
-	wg.Add(len(e.Records))
-
 	for _, r := range e.Records {
 		go func(r events.SQSMessage) {
-			defer wg.Done()
 
-			// Build standard HTTP request from the SQS event
+			err := func() error {
+				// Build standard HTTP request from the SQS event
 
-			u, _ := url.Parse(fmt.Sprintf("http://%s/_lambdafy/sqs", appEndpoint))
-			req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), strings.NewReader(r.Body))
-			if err != nil {
-				log.Printf("error creating HTTP request for SQS msg %s: %v", r.MessageId, err)
-				return
-			}
-			req.Header.Add("Content-Length", strconv.Itoa(len(r.Body)))
-			resp, err := client.Do(req)
-			if err != nil {
-				log.Printf("error sending HTTP request for SQS msg %s: %v", r.MessageId, err)
-				return
-			}
-			defer resp.Body.Close()
-
-			// If success, delete the message from the queue.
-
-			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-				_, err := sqsCl.DeleteMessage(ctx, &sqs.DeleteMessageInput{
-					QueueUrl:      aws.String(getSQSQueueURL(r.EventSourceARN)),
-					ReceiptHandle: &r.ReceiptHandle,
-				})
+				u, _ := url.Parse(fmt.Sprintf("http://%s/_lambdafy/sqs", appEndpoint))
+				req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), strings.NewReader(r.Body))
 				if err != nil {
-					log.Printf("error deleting processed SQS msg %s: %v", r.MessageId, err)
+					return fmt.Errorf("error creating HTTP request: %v", err)
 				}
-				return
-			}
+				req.Header.Add("Content-Length", strconv.Itoa(len(r.Body)))
+				resp, err := client.Do(req)
+				if err != nil {
+					return fmt.Errorf("error sending HTTP request: %v", err)
+				}
+				defer resp.Body.Close()
 
-			// If failed, log the response status and body
+				// Success
 
-			log.Printf("failed to process SQS msg %s: %s", r.MessageId, resp.Status)
-			b, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				log.Printf("error reading response body for SQS msg %s: %v", r.MessageId, err)
-				return
-			}
-			log.Print(string(b))
+				if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+					return nil
+				}
+
+				// Failure
+
+				b, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					return fmt.Errorf("error reading response body: %v", err)
+				}
+				return fmt.Errorf("non-2xx/3xx response: %s", string(b))
+			}()
+			taskResults <- taskResult{msgID: r.MessageId, err: err}
 
 		}(r)
 	}
 
-	wg.Wait()
+	for range e.Records {
+		res := <-taskResults
+		if res.err == nil {
+			continue
+		}
+		log.Printf("failed to process SQS msg %s: %s", res.msgID, err)
+		resp.BatchItemFailures = append(resp.BatchItemFailures, events.SQSBatchItemFailure{
+			ItemIdentifier: res.msgID,
+		})
+	}
+
+	return resp, nil
 }
 
 // handleHTTP handles API Gateway HTTP events and translates them to HTTP
