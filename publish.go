@@ -464,7 +464,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 	}
 
-	log.Printf("waiting for function to become ready")
+	log.Printf("waiting for the new function version to become ready")
 
 	return res, waitOnFunc(ctx, lambdaCl, spec.Name, res.Version)
 }

@@ -77,6 +77,7 @@ func handle(ctx context.Context, e map[string]json.RawMessage) (any, error) {
 	if _, ok := e["Records"]; ok { // SQS event
 		var sqsEvent events.SQSEvent
 		if err := json.Unmarshal(b, &sqsEvent); err != nil {
+			log.Printf("failed to unmarshal the SQS event: %v", err)
 			return nil, err
 		}
 		return handleSQS(ctx, sqsEvent)
@@ -84,6 +85,7 @@ func handle(ctx context.Context, e map[string]json.RawMessage) (any, error) {
 	} else if _, ok := e["rawQueryString"]; ok {
 		var httpEvent events.APIGatewayV2HTTPRequest
 		if err := json.Unmarshal(b, &httpEvent); err != nil {
+			log.Printf("failed to unmarshal the APIGatewayV2 event: %v", err)
 			return nil, err
 		}
 		return handleHTTP(ctx, httpEvent)
@@ -163,12 +165,15 @@ func handleSQS(ctx context.Context, e events.SQSEvent) (resp events.SQSEventResp
 		if res.err == nil {
 			continue
 		}
-		log.Printf("failed to process SQS msg %s: %s", res.msgID, err)
+		log.Printf("failed to process SQS msg %s: %s", res.msgID, res.err)
 		resp.BatchItemFailures = append(resp.BatchItemFailures, events.SQSBatchItemFailure{
 			ItemIdentifier: res.msgID,
 		})
 	}
 
+	if len(resp.BatchItemFailures) > 0 {
+		return resp, fmt.Errorf("some requests failed")
+	}
 	return resp, nil
 }
 
