@@ -82,12 +82,18 @@ func init() {
 	var al string
 	var vars *[]string
 	var forceUpdateAlias bool
+	var pauseSQSTriggers bool
 	publishCmd = &cobra.Command{
 		Use:     "publish {spec-file|-}",
 		Aliases: []string{"pub"},
 		Short:   "Publish a new version of a function without routing traffic to it",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
+
+			if pauseSQSTriggers {
+				return fmt.Errorf("pause-sqs-triggers is not yet implemented")
+			}
+
 			p := args[0]
 			var r io.Reader
 			if p == "-" {
@@ -132,6 +138,7 @@ func init() {
 	}
 	publishCmd.Flags().StringVarP(&al, "alias", "a", "", "Alias to create for the new version")
 	publishCmd.Flags().BoolVarP(&forceUpdateAlias, "force-update-alias", "A", false, "Force update the alias if already exists")
+	publishCmd.Flags().BoolVar(&pauseSQSTriggers, "pause-sqs-triggers", false, "Do not enable SQS triggers when publishing the function")
 	vars = publishCmd.Flags().StringArrayP("var", "v", nil, "Replace placeholders in the spec - e.g. FOO=BAR - can be specified multiple times")
 }
 

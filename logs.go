@@ -81,7 +81,7 @@ func logs(fnName string, version int, since time.Time, afterToken string) (fnLog
 	// This is a hack to get the logs for a specific version. To cater for
 	// logstreams that start just before a new date or run for multiple days, we
 	// look at logstreams a few days into the past first.
-	const maxDays = 3
+	const maxDays = 2
 	prefixDate := since.UTC().AddDate(0, 0, -(maxDays - 1))
 	now := time.Now()
 
