@@ -429,6 +429,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 				BatchSize:                      s.BatchSize,
 				MaximumBatchingWindowInSeconds: s.BatchWindow,
 				ScalingConfig:                  scal,
+				FunctionResponseTypes:          []lambdatypes.FunctionResponseType{lambdatypes.FunctionResponseTypeReportBatchItemFailures},
 				Enabled:                        aws.Bool(false),
 			}); err != nil {
 				return res, fmt.Errorf("failed to add SQS trigger: %s", err)
