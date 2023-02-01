@@ -265,7 +265,7 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 
 	log.Printf("staging success")
 
-	log.Printf("transitioning SQS triggers to new the version")
+	log.Printf("transitioning SQS triggers to the new version")
 
 	// We first enable the SQS triggers for the new version to ensure we are not
 	// left without any message receivers should something fail here.
