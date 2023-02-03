@@ -398,19 +398,6 @@ func run() (exitCode int, err error) {
 
 	args := os.Args[2:]
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Start listening for traffic as soon as possible, otherwise lambda will
-	// throw timeout errors.
-
-	lambdaStopped := make(chan struct{})
-
-	go func() {
-		defer close(lambdaStopped)
-		lambda.StartWithContext(ctx, handle)
-	}()
-
 	// Start own AWS proxy endpoint (used for sending on SQS and other services)
 
 	http.HandleFunc("/sqs", handleSQSSend)
@@ -420,18 +407,31 @@ func run() (exitCode int, err error) {
 
 	os.Setenv("PORT", strconv.Itoa(port))
 
-	cmd := exec.CommandContext(ctx, cmdName, args...)
+	// Run the command
+
+	cmd := exec.Command(cmdName, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		cancel()
 		return 127, fmt.Errorf("failed to run command: %s", err)
 	}
 
-	// Exit when the child process exits
+	// Pass through all signals to the child process
 
+	sigs := make(chan os.Signal)
 	go func() {
+		for s := range sigs {
+			_ = cmd.Process.Signal(s)
+		}
+	}()
+	signal.Notify(sigs)
+
+	// Monitor child process for when it exits.
+
+	processStopped := make(chan struct{})
+	go func() {
+		defer close(processStopped)
 		if err := cmd.Wait(); err != nil {
 			if err, ok := err.(*exec.ExitError); ok {
 				log.Printf("command exited with code: %d", err.ExitCode())
@@ -439,20 +439,16 @@ func run() (exitCode int, err error) {
 				log.Printf("error: waiting for command: %s", err)
 			}
 		}
-		cancel()
 	}()
 
-	// Pass through all signals to the child process
+	// Start listening for traffic as soon as possible, otherwise lambda will
+	// throw timeout errors.
+	// If start fails, it rudely kills the process so no need to do anything here.
+	// Inside a container, once we are killed, so will every other process, so no
+	// need to do anything here to catch it.
 
-	sigs := make(chan os.Signal, 1)
-	go func() {
-		for s := range sigs {
-			if cmd.Process != nil { // to ignore signals while subcmd is launching
-				_ = cmd.Process.Signal(s)
-			}
-		}
-	}()
-	signal.Notify(sigs)
+	//go lambda.StartWithOptions(handle, lambda.WithEnableSIGTERM(func() { sigs <- syscall.SIGTERM }))
+	go lambda.Start(handle)
 
 	// Wait until the upstream is up and running
 
@@ -466,40 +462,27 @@ func run() (exitCode int, err error) {
 
 	for {
 		u := "http://" + appEndpoint + "/"
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		req, err := http.NewRequest(http.MethodGet, u, nil)
 		if err != nil {
 			return 1, fmt.Errorf("failed to create startup request: %s", err)
 		}
 		if resp, err := waitClient.Do(req); err == nil {
 			resp.Body.Close()
+			log.Printf("startup request passed - proxying requests from now on")
+			close(started) // Unblock the request handler
 			break
 		}
 		select {
-		case <-ctx.Done():
-			return 1, fmt.Errorf("startup request aborted due to cancelled context")
+		case <-processStopped:
+			break
 		default:
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
 
-	log.Printf("startup request passed - proxying requests from now on")
+	// Wait for process/lambda to stop.
 
-	// Unblock the request handler
-
-	close(started)
-
-	// Wait for lambda listener to stop (or the main context to be cancelled)
-
-	select {
-	case <-lambdaStopped:
-	case <-ctx.Done():
-	}
-
-	// Terminate child process when the proxy exits - usually due to error
-
-	cancel()
-	signal.Stop(sigs)
-	close(sigs)
+	<-processStopped
 
 	if cmd.ProcessState.ExitCode() == -1 {
 		return 127, nil
