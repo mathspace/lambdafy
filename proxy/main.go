@@ -439,6 +439,8 @@ func run() (exitCode int, err error) {
 				log.Printf("error: waiting for command: %s", err)
 			}
 		}
+		os.Stdout.Sync()
+		os.Stderr.Sync()
 	}()
 
 	// Start listening for traffic as soon as possible, otherwise lambda will
@@ -447,8 +449,7 @@ func run() (exitCode int, err error) {
 	// Inside a container, once we are killed, so will every other process, so no
 	// need to do anything here to catch it.
 
-	//go lambda.StartWithOptions(handle, lambda.WithEnableSIGTERM(func() { sigs <- syscall.SIGTERM }))
-	go lambda.Start(handle)
+	go lambda.StartWithOptions(handle, lambda.WithEnableSIGTERM())
 
 	// Wait until the upstream is up and running
 
