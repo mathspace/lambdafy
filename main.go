@@ -8,7 +8,6 @@ import (
 	"os"
 	"text/template"
 
-	_ "github.com/oxplot/starenv/autoload"
 	"github.com/spf13/cobra"
 )
 
