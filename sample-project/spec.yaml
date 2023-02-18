@@ -3,3 +3,5 @@ image: lambdafy-sample-project
 role: generate
 create_repo: true
 timeout: 30
+cron:
+  hourly: '* * * * ? *'

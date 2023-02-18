@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +15,8 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/aws/aws-sdk-go-v2/service/scheduler"
+	schedulertypes "github.com/aws/aws-sdk-go-v2/service/scheduler/types"
 	"github.com/spf13/cobra"
 )
 
@@ -284,6 +287,72 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 	} else {
 		if err := enableSQSTriggers(sqsCtx, lambdaCl, fnName, numVer, false); err != nil {
 			return "", fmt.Errorf("failed to disable SQS triggers: %s", err)
+		}
+	}
+
+	log.Printf("(re-)creating cron triggers for the new version")
+
+	schedCl := scheduler.NewFromConfig(acfg)
+	schedGroupName := fmt.Sprintf("lambdafy-%s", fnName)
+	if _, err := schedCl.DeleteScheduleGroup(ctx, &scheduler.DeleteScheduleGroupInput{
+		Name: &schedGroupName,
+	}); err != nil {
+		if !strings.Contains(err.Error(), "ResourceNotFoundException") {
+			return "", fmt.Errorf("failed to delete schedule group: %s", err)
+		}
+	}
+
+	// Load env vars from function config and extract cron defs from it.
+
+	fnCfg, err := lambdaCl.GetFunction(ctx, &lambda.GetFunctionInput{
+		FunctionName: &fnName,
+		Qualifier:    aws.String(strconv.Itoa(version)),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to get function config: %s", err)
+	}
+	crons := make(map[string]string)
+	for k, v := range fnCfg.Configuration.Environment.Variables {
+		if !strings.HasPrefix(k, specInEnvCronPrefix) {
+			continue
+		}
+		crons[k[len(specInEnvCronPrefix):]] = v
+	}
+
+	if len(crons) > 0 {
+		// We need to retry because DeleteScheduleGroup call above takes time to
+		// complete.
+		ctxTo, cancel = context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		if err := retry(ctxTo, func() error {
+			_, err := schedCl.CreateScheduleGroup(ctxTo, &scheduler.CreateScheduleGroupInput{
+				Name: &schedGroupName,
+			})
+			return err
+		}, "ConflictException"); err != nil {
+			return "", fmt.Errorf("failed to create schedule group: %s", err)
+		}
+		for k, v := range crons {
+			// payload is used by the proxy to extract the name of the cron and pass
+			// it onto the app.
+			payload, _ := json.Marshal(map[string]string{
+				"cron": k,
+			})
+			if _, err := schedCl.CreateSchedule(ctx, &scheduler.CreateScheduleInput{
+				Name:               aws.String(fmt.Sprintf("lambdafy-%s-%s", fnName, k)),
+				GroupName:          &schedGroupName,
+				ScheduleExpression: aws.String(fmt.Sprintf("cron(%s)", v)),
+				Target: &schedulertypes.Target{
+					Arn:     fnCfg.Configuration.FunctionArn,
+					RoleArn: fnCfg.Configuration.Role,
+					Input:   aws.String(string(payload)),
+				},
+				FlexibleTimeWindow: &schedulertypes.FlexibleTimeWindow{
+					Mode: schedulertypes.FlexibleTimeWindowModeOff,
+				},
+			}); err != nil {
+				return "", fmt.Errorf("failed to create schedule: %s", err)
+			}
 		}
 	}
 

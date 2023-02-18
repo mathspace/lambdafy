@@ -7,6 +7,9 @@
 # spec files with different names (e.g. my-great-app-staging,
 # my-great-app-production). Essentially, treat each stage as a separate
 # app. Same for environments or variations of your app.
+#
+# Tip: You can use a spec file as a template and use sed or -v option of
+# `lambdafy publish` to replace the placeholders with actual values.
 name: my-great-app
 
 # Docker image to use. If an ECR image URI is given, it is used as is to
@@ -149,6 +152,16 @@ role: generate
 # sqs_triggers:
 #   - arn: arn:aws:sqs:us-east-1:123456789012:my-queue
 #     batch_size: 1
+
+# cron defines the map of cron trigger name to its cron definition. When each
+# cron fires, it will send an empty POST request to /_lambdafy/cron?name=<name>
+# where <name> is the name of the cron trigger. See
+# https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html#CronExpressions
+# for the detailed cron format. Note that all times are in UTC.
+#
+# cron:
+#   send-daily-emails: "0 0 * * ? *"
+#   optimize-images-hourly: "0 * * * ? *"
 
 # allowed_account_regions is a list of account:region that specify which
 # AWS account and region combinations are allowed to be deployed to.

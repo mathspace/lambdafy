@@ -15,7 +15,7 @@ def app(environ, start_response):
         return [b""]
 
     start_response("200 OK", [("Content-Type", "text/plain")])
-    print("Received HTTP request", file=sys.stderr)
+    print("Received HTTP request at %s" % environ["PATH_INFO"], file=sys.stderr)
     return [b"Greetings from lambdafy.\n"]
 
 

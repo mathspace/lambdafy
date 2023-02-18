@@ -61,6 +61,7 @@ type Spec struct {
 	TempSize              *int32            `yaml:"temp_size,omitempty"`
 	CORS                  bool              `yaml:"cors,omitempty"`
 	SQSTriggers           []*SQSTrigger     `yaml:"sqs_triggers,omitempty"`
+	CronTriggers          map[string]string `yaml:"cron,omitempty"`
 	AllowedAccountRegions []string          `yaml:"allowed_account_regions,omitempty"`
 	allowedGlobs          []glob.Glob       `yaml:"-"`
 }
@@ -172,8 +173,26 @@ func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 		}
 	}
 
+	// 11 is the minimum length of a cron expression.
+	cronValCharPat := regexp.MustCompile(`^[ 0-9/?#*,A-Z-]{11,}$`)
+	cronNameCharPat := regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`)
+	for k, v := range s.CronTriggers {
+		if !cronNameCharPat.MatchString(k) {
+			return nil, errors.New("cron expression name can only have a-z, 0-9 and dash")
+		}
+		v = strings.TrimSpace(v)
+		if !cronValCharPat.MatchString(v) {
+			return nil, errors.New("invalid cron expression for" + k)
+		}
+		s.CronTriggers[k] = v
+	}
+
 	if !strings.Contains(s.Image, ":") {
 		s.Image += ":latest"
+	}
+
+	if s.Env == nil {
+		s.Env = make(map[string]string)
 	}
 
 	return &s, nil

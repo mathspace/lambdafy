@@ -77,8 +77,22 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 	if env := gfo.Configuration.Environment; env != nil {
 		spec.Env = env.Variables
 
+		// Parse Cors
+
 		if spec.Env[specInEnvPrefix+"CORS"] == "true" {
 			spec.CORS = true
+		}
+
+		// Parse cron spec
+
+		spec.CronTriggers = make(map[string]string)
+		for k, v := range spec.Env {
+			if strings.HasPrefix(k, specInEnvCronPrefix) {
+				spec.CronTriggers[k[len(specInEnvCronPrefix):]] = v
+			}
+		}
+		if len(spec.CronTriggers) == 0 {
+			spec.CronTriggers = nil
 		}
 
 		// HACK remove specInEnvPrefix prefixed env vars as they are a hack to store

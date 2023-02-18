@@ -89,9 +89,34 @@ func handle(ctx context.Context, e map[string]json.RawMessage) (any, error) {
 			return nil, err
 		}
 		return handleHTTP(ctx, httpEvent)
+
+	} else if _, ok := e["cron"]; ok {
+		var cronEvent struct {
+			Cron string `json:"cron"`
+		}
+		if err := json.Unmarshal(b, &cronEvent); err != nil {
+			log.Printf("failed to unmarshal the cron event: %v", err)
+		}
+		return nil, handleCron(ctx, cronEvent.Cron)
 	}
 
 	return nil, fmt.Errorf("event type %v not supported by this lambda function", e)
+}
+
+func handleCron(ctx context.Context, cronName string) error {
+	u := fmt.Sprintf("http://%s/_lambdafy/cron?name=%s", appEndpoint, url.QueryEscape(cronName))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return fmt.Errorf("error creating HTTP request for cron '%s': %v", cronName, err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error sending HTTP request for cron '%s': %v", cronName, err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		return fmt.Errorf("error sending HTTP request for cron '%s': %v", cronName, resp.Status)
+	}
+	return nil
 }
 
 var sqsARNPat = regexp.MustCompile(`^arn:aws:sqs:([^:]+):([^:]+):(.+)$`)
@@ -110,7 +135,7 @@ func getSQSQueueURL(arn string) string {
 // event body as the HTTP payload. A 2xx/3xx response from the user program is
 // considered a success and the event is deleted from the queue. A non-2xx/3xx
 // response is considered a failure and the event is left in the queue for
-// retry. If any item in the batch fails,
+// retry.
 func handleSQS(ctx context.Context, e events.SQSEvent) (resp events.SQSEventResponse, err error) {
 
 	log.Printf("processing batch of %d SQS records", len(e.Records))
@@ -362,6 +387,17 @@ func run() (exitCode int, err error) {
 	}
 	cmdName := os.Args[1]
 
+	// Remove all env vars with lambdafy prefix to prevent child process from
+	// depending on them.
+	// IMPORTANT: This must come before startenv loading since none of the values
+	// in the lambdafy prefixed env vars are meant be dereferenced.
+
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, lambdafyEnvPrefix) {
+			os.Unsetenv(strings.SplitN(e, "=", 2)[0])
+		}
+	}
+
 	// Load env vars/derefence them from various sources
 
 	for t, n := range derefer.NewDefault {
@@ -371,15 +407,6 @@ func run() (exitCode int, err error) {
 
 	if err := starenv.Load(); err != nil {
 		return 1, fmt.Errorf("error loading env vars: %w", err)
-	}
-
-	// Remove all env vars with lambdafy prefix to prevent child process from
-	// depending on them.
-
-	for _, e := range os.Environ() {
-		if strings.HasPrefix(e, lambdafyEnvPrefix) {
-			os.Unsetenv(strings.SplitN(e, "=", 2)[0])
-		}
 	}
 
 	if !inLambda {

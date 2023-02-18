@@ -41,6 +41,7 @@ func canonicalizePolicyString(s string, urlenc bool) (string, error) {
 
 // retryOnResourceConflict retries a function if it returns a resource conflict error.
 // It also retries on a few other errors that are known to be transient.
+// Deprecated: use retry() instead.
 func retryOnResourceConflict(ctx context.Context, fn func() error) error {
 	for {
 		err := fn()
@@ -49,12 +50,40 @@ func retryOnResourceConflict(ctx context.Context, fn func() error) error {
 			return err
 		case strings.Contains(err.Error(), "ARN does not refer to a valid principal"):
 		case strings.Contains(err.Error(), "role defined for the function cannot be assumed"):
-		case strings.Contains(err.Error(), "ResourceInUseException"):
-		case strings.Contains(err.Error(), "ResourceConflictException"):
+		case strings.Contains(err.Error(), "InUseException"):
+		case strings.Contains(err.Error(), "ConflictException"):
 			if strings.Contains(err.Error(), "exists") {
 				return err
 			}
 		default:
+			return err
+		}
+		t := time.NewTimer(time.Second)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-t.C:
+		}
+	}
+}
+
+// retry retries a function if it returns an error that matches one of the
+// strings in ignore.
+func retry(ctx context.Context, fn func() error, ignore ...string) error {
+	for {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+		errStr := err.Error()
+		doRetry := false
+		for _, s := range ignore {
+			if strings.Contains(errStr, s) {
+				doRetry = true
+				break
+			}
+		}
+		if !doRetry {
 			return err
 		}
 		t := time.NewTimer(time.Second)

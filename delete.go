@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/scheduler"
 	"github.com/spf13/cobra"
 )
 
@@ -46,6 +48,16 @@ func deleteFunction(name string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load aws config: %s", err)
 	}
+
+	schedCl := scheduler.NewFromConfig(acfg)
+	if _, err := schedCl.DeleteScheduleGroup(ctx, &scheduler.DeleteScheduleGroupInput{
+		Name: aws.String(fmt.Sprintf("lambdafy-%s", name)),
+	}); err != nil {
+		if !strings.Contains(err.Error(), "404") {
+			return fmt.Errorf("failed to delete schedule group: %s", err)
+		}
+	}
+
 	lambdaCl := lambda.NewFromConfig(acfg)
 
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
