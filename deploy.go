@@ -312,11 +312,14 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 		return "", fmt.Errorf("failed to get function config: %s", err)
 	}
 	crons := make(map[string]string)
-	for k, v := range fnCfg.Configuration.Environment.Variables {
-		if !strings.HasPrefix(k, specInEnvCronPrefix) {
-			continue
+	env := fnCfg.Configuration.Environment
+	if env != nil {
+		for k, v := range env.Variables {
+			if !strings.HasPrefix(k, specInEnvCronPrefix) {
+				continue
+			}
+			crons[k[len(specInEnvCronPrefix):]] = v
 		}
-		crons[k[len(specInEnvCronPrefix):]] = v
 	}
 
 	if len(crons) > 0 {
