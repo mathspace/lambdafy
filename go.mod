@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/iam v1.19.0
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.28.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.18.0
-	github.com/docker/docker v20.10.22+incompatible
+	github.com/docker/docker v20.10.24+incompatible
 	github.com/gobwas/glob v0.2.3
 	github.com/spf13/pflag v1.0.5
 	gopkg.in/yaml.v2 v2.4.0
