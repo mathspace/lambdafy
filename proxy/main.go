@@ -18,7 +18,6 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/oxplot/starenv"
-	"github.com/oxplot/starenv/derefer"
 )
 
 const lambdafyEnvPrefix = "LAMBDAFY_"
@@ -112,12 +111,13 @@ func run() (exitCode int, err error) {
 
 	// Load env vars/derefence them from various sources
 
-	for t, n := range derefer.NewDefault {
-		starenv.Register(t, &derefer.Lazy{New: n})
+	envLoader := starenv.NewLoader()
+	for t, n := range starenv.DefaultDerefers {
+		envLoader.Register(t, &starenv.LazyDerefer{New: n})
 	}
-	starenv.Register(sendSQSStarenvTag, sqsIDToQueueURL)
+	envLoader.Register(sendSQSStarenvTag, sqsIDToQueueURL)
 
-	if err := starenv.Load(); err != nil {
+	if err := envLoader.Load(); err != nil {
 		return 1, fmt.Errorf("error loading env vars: %w", err)
 	}
 
