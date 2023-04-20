@@ -17,6 +17,7 @@ import (
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/scheduler"
 	schedulertypes "github.com/aws/aws-sdk-go-v2/service/scheduler/types"
+	"github.com/mathspace/lambdafy/fnspec"
 	"github.com/spf13/cobra"
 )
 
@@ -121,11 +122,7 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 	var cors lambdatypes.Cors
 	if env != nil {
 		if corsStr, ok := env.Variables[specInEnvPrefix+"CORS"]; ok {
-			var c struct {
-				Origins []string `json:"origins"`
-				Methods []string `json:"methods"`
-				Headers []string `json:"headers"`
-			}
+			var c fnspec.CORS
 			if err := json.Unmarshal([]byte(corsStr), &c); err != nil {
 				return "", fmt.Errorf("failed to parse CORS configuration: %s", err)
 			}
