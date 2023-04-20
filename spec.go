@@ -79,8 +79,18 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 
 		// Parse Cors
 
-		if spec.Env[specInEnvPrefix+"CORS"] == "true" {
-			spec.CORS = true
+		if cors, ok := spec.Env[specInEnvPrefix+"CORS"]; ok {
+			var c struct {
+				Origins []string `json:"origins"`
+				Methods []string `json:"methods"`
+				Headers []string `json:"headers"`
+			}
+			if err := json.Unmarshal([]byte(cors), &c); err != nil {
+				return spec, fmt.Errorf("failed to parse CORS configuration: %s", err)
+			}
+			spec.CORS.Origins = c.Origins
+			spec.CORS.Methods = c.Methods
+			spec.CORS.Headers = c.Headers
 		}
 
 		// Parse cron spec

@@ -129,11 +129,19 @@ role: generate
 # vpc_subnet_ids:
 #   - "34623423"
 
-# cors enables cross-origin resource sharing (CORS) for the function.
-# If specified, the function will respond to OPTIONS requests with
-# appropriate CORS headers.
+# cors enables cross-origin resource sharing (CORS) for the function.  If
+# specified, the function will respond to OPTIONS requests with appropriate CORS
+# headers. Use "*" to allow match all. If specifying methods and headers,
+# origins must be specified.
 #
-# cors: false
+# cors:
+#   origins:
+#     - "*"
+#   methods:
+#     - "GET"
+#     - "POST"
+#   headers:
+#     - "Content-Type"
 
 # sqs_triggers define the list of SQS queues to trigger the function.
 # When a message arrives in the queue, the lambdafy proxy will send a POST HTTP

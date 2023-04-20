@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/gobwas/glob"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // RoleGenerate is a special role name that indicates the role should be
@@ -39,6 +39,13 @@ type SQSTrigger struct {
 	Concurrency *int32 `yaml:"concurrency,omitempty"`
 }
 
+// CORS represents the CORS configuration for a lambda function.
+type CORS struct {
+	Origins []string `yaml:"origins,omitempty" json:"origins,omitempty"`
+	Methods []string `yaml:"methods,omitempty" json:"methods,omitempty"`
+	Headers []string `yaml:"headers,omitempty" json:"headers,omitempty"`
+}
+
 // Spec is the specification of a lambda function.
 type Spec struct {
 	Name                  string            `yaml:"name"`
@@ -59,7 +66,7 @@ type Spec struct {
 	VPCSubnetIds          []string          `yaml:"vpc_subnet_ids,omitempty"`
 	EFSMounts             []*EFSMount       `yaml:"efs_mounts,omitempty"`
 	TempSize              *int32            `yaml:"temp_size,omitempty"`
-	CORS                  bool              `yaml:"cors,omitempty"`
+	CORS                  CORS              `yaml:"cors,omitempty"`
 	SQSTriggers           []*SQSTrigger     `yaml:"sqs_triggers,omitempty"`
 	CronTriggers          map[string]string `yaml:"cron,omitempty"`
 	AllowedAccountRegions []string          `yaml:"allowed_account_regions,omitempty"`
@@ -104,7 +111,9 @@ func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 	}
 
 	var s Spec
-	if err := yaml.NewDecoder(r).Decode(&s); err != nil {
+	dec := yaml.NewDecoder(r)
+	dec.KnownFields(true)
+	if err := dec.Decode(&s); err != nil {
 		return nil, err
 	}
 	if s.Name == "" || s.Image == "" || s.Role == "" {
@@ -193,6 +202,19 @@ func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 
 	if s.Env == nil {
 		s.Env = make(map[string]string)
+	}
+
+	if s.CORS.Headers == nil {
+		s.CORS.Headers = []string{}
+	}
+	if s.CORS.Methods == nil {
+		s.CORS.Methods = []string{}
+	}
+	if s.CORS.Origins == nil {
+		s.CORS.Origins = []string{}
+	}
+	if len(s.CORS.Origins) == 0 && (len(s.CORS.Headers) > 0 || len(s.CORS.Methods) > 0) {
+		return nil, errors.New("cors.allowed_origins must be specified if cors.allowed_headers or cors.allowed_methods are specified")
 	}
 
 	return &s, nil

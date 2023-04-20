@@ -119,8 +119,20 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 	}
 	env := gfo.Configuration.Environment
 	var cors lambdatypes.Cors
-	if env != nil && env.Variables[specInEnvPrefix+"CORS"] == "true" {
-		cors.AllowOrigins = []string{"*"}
+	if env != nil {
+		if corsStr, ok := env.Variables[specInEnvPrefix+"CORS"]; ok {
+			var c struct {
+				Origins []string `json:"origins"`
+				Methods []string `json:"methods"`
+				Headers []string `json:"headers"`
+			}
+			if err := json.Unmarshal([]byte(corsStr), &c); err != nil {
+				return "", fmt.Errorf("failed to parse CORS configuration: %s", err)
+			}
+			cors.AllowOrigins = c.Origins
+			cors.AllowMethods = c.Methods
+			cors.AllowHeaders = c.Headers
+		}
 	}
 
 	// Create or update function URL

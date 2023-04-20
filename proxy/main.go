@@ -117,8 +117,8 @@ func run() (exitCode int, err error) {
 	}
 	envLoader.Register(sendSQSStarenvTag, sqsIDToQueueURL)
 
-	if err := envLoader.Load(); err != nil {
-		return 1, fmt.Errorf("error loading env vars: %w", err)
+	if err := envLoader.Load(); len(err) > 0 {
+		return 1, fmt.Errorf("error loading env vars: %s", err)
 	}
 
 	if !inLambda {

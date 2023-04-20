@@ -168,9 +168,15 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 	// HACK add CORS config to env vars so it can be used when deploying.
 
-	if spec.CORS {
-		spec.Env[specInEnvPrefix+"CORS"] = "true"
+	corsBytes, err := json.Marshal(fnspec.CORS{
+		Origins: spec.CORS.Origins,
+		Methods: spec.CORS.Methods,
+		Headers: spec.CORS.Headers,
+	})
+	if err != nil {
+		return res, fmt.Errorf("failed to marshal CORS config: %s", err)
 	}
+	spec.Env[specInEnvPrefix+"CORS"] = string(corsBytes)
 
 	// HACK embed the cron setting into env vars so they can be used by deploy
 	// process to create the schedules. This simply passes the responsility of
