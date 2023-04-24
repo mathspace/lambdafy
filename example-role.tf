@@ -34,6 +34,15 @@ resource "aws_iam_user_policy" "lambdafy" {
     {
       "Effect": "Allow",
       "Action": [
+        "scheduler:DeleteScheduleGroup",
+        "scheduler:CreateScheduleGroup",
+        "scheduler:CreateSchedule",
+      ],
+      "Resource": ["*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
         "iam:CreateRole",
         "iam:PutRolePolicy",
         "iam:UpdateRole"
