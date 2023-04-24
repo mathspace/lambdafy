@@ -36,7 +36,8 @@ resource "aws_iam_user_policy" "lambdafy" {
       "Action": [
         "scheduler:DeleteScheduleGroup",
         "scheduler:CreateScheduleGroup",
-        "scheduler:CreateSchedule"
+        "scheduler:CreateSchedule",
+        "scheduler:DeleteSchedule"
       ],
       "Resource": ["*"]
     },
