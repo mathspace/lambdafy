@@ -32,6 +32,9 @@ var (
 	started         = make(chan struct{})
 
 	client = &http.Client{
+		Transport: &http.Transport{
+			DisableKeepAlives: true,
+		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -193,6 +196,9 @@ func run() (exitCode int, err error) {
 	// Wait until the upstream is up and running
 
 	waitClient := &http.Client{
+		Transport: &http.Transport{
+			DisableKeepAlives: true,
+		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
