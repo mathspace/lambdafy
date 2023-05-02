@@ -200,6 +200,7 @@ func run() (exitCode int, err error) {
 
 	log.Printf("waiting for startup request to succeed")
 
+StartupRequest:
 	for {
 		u := "http://" + appEndpoint + "/"
 		req, err := http.NewRequest(http.MethodGet, u, nil)
@@ -214,7 +215,7 @@ func run() (exitCode int, err error) {
 		}
 		select {
 		case <-processStopped:
-			break
+			break StartupRequest
 		default:
 			time.Sleep(100 * time.Millisecond)
 		}
