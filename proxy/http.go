@@ -109,6 +109,7 @@ func handleHTTP(ctx context.Context, req events.APIGatewayV2HTTPRequest) (res ev
 			}
 		}
 	}
+	res.Headers["Via"] = "1.1 lambdafy (" + version + ")"
 
 	return
 }

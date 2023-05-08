@@ -17,7 +17,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-//go:generate sh -c "cd proxy ; CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w' -o ../proxy-linux-amd64"
+//go:generate ./build-proxy.sh
 
 //go:embed proxy-linux-amd64
 var proxyBinary []byte

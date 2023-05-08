@@ -23,6 +23,9 @@ import (
 const lambdafyEnvPrefix = "LAMBDAFY_"
 
 var (
+	// These will be populated by go generate.
+	version = "dev"
+
 	port            int    // base port for various endpoints
 	appEndpoint     string // end point that proxy will proxy requests to
 	listen          string // listen address for our own HTTP server used for proxying to AWS services.
