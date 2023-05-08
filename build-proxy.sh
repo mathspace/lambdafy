@@ -6,7 +6,7 @@ export GOOS=linux
 export GOARCH=amd64
 
 VER="$(
-if [[ -n $(git status --porcelain) ]]; then
+if [[ -n "$(git status --porcelain)" ]]; then
   echo "dev"
 else
   git describe --tags --match "v*" --always
