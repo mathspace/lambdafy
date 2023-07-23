@@ -268,7 +268,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 		// Convert tags to iamtype tags
 
-		tags := make([]iamtypes.Tag, len(spec.Tags))
+		tags := make([]iamtypes.Tag, 0, len(spec.Tags))
 		for k, v := range spec.Tags {
 			tags = append(tags, iamtypes.Tag{
 				Key:   aws.String(k),
