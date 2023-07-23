@@ -17,7 +17,6 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
-	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
@@ -266,16 +265,6 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 		log.Printf("generating role")
 
-		// Convert tags to iamtype tags
-
-		tags := make([]iamtypes.Tag, 0, len(spec.Tags))
-		for k, v := range spec.Tags {
-			tags = append(tags, iamtypes.Tag{
-				Key:   aws.String(k),
-				Value: aws.String(v),
-			})
-		}
-
 		// Serialize policy into JSON string
 
 		pol, err := serializeRolePolicy(spec.RoleExtraPolicy)
@@ -291,7 +280,6 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 			RoleName:                 &roleName,
 			Description:              aws.String("lambdafy generated role"),
 			AssumeRolePolicyDocument: &defaultAssumeRolePolicy,
-			Tags:                     tags,
 		})
 		if err == nil {
 			roleArn = *out.Role.Arn
