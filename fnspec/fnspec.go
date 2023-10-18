@@ -184,10 +184,10 @@ func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 
 	// 11 is the minimum length of a cron expression.
 	cronValCharPat := regexp.MustCompile(`^[ 0-9/?#*,A-Z-]{11,}$`)
-	cronNameCharPat := regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`)
+	cronNameCharPat := regexp.MustCompile(`^[a-z0-9](?:[a-z0-9_]*[a-z0-9])?$`)
 	for k, v := range s.CronTriggers {
 		if !cronNameCharPat.MatchString(k) {
-			return nil, errors.New("cron expression name can only have a-z, 0-9 and dash")
+			return nil, errors.New("cron expression name can only have a-z, 0-9 and underscore")
 		}
 		v = strings.TrimSpace(v)
 		if !cronValCharPat.MatchString(v) {
