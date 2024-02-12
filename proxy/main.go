@@ -32,7 +32,6 @@ var (
 	functionName    = os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
 	functionVersion = os.Getenv("AWS_LAMBDA_FUNCTION_VERSION")
 	inLambda        = functionName != "" && functionVersion != "" && os.Getenv("AWS_LAMBDA_RUNTIME_API") != ""
-	started         = make(chan struct{})
 
 	client = &http.Client{
 		Transport: &http.Transport{
@@ -55,9 +54,6 @@ func init() {
 
 // handle is a generic handler for all Lambda events supported by this function.
 func handle(ctx context.Context, e map[string]json.RawMessage) (any, error) {
-
-	// Once started channel is closed, this will unblock for all future requests.
-	<-started
 
 	// Flush stdout and stderr before returning to ensure the logs are captured by
 	// AWS.
@@ -188,14 +184,6 @@ func run() (exitCode int, err error) {
 		os.Stderr.Sync()
 	}()
 
-	// Start listening for traffic as soon as possible, otherwise lambda will
-	// throw timeout errors.
-	// If start fails, it rudely kills the process so no need to do anything here.
-	// Inside a container, once we are killed, so will every other process, so no
-	// need to do anything here to catch it.
-
-	go lambda.StartWithOptions(handle, lambda.WithEnableSIGTERM())
-
 	// Wait until the upstream is up and running
 
 	waitClient := &http.Client{
@@ -219,7 +207,15 @@ StartupRequest:
 		if resp, err := waitClient.Do(req); err == nil {
 			resp.Body.Close()
 			log.Printf("startup request passed - proxying requests from now on")
-			close(started) // Unblock the request handler
+			// We will only start accepting requests once the startup request to the
+			// upstream has succeeded. This is to ensure that the upstream is up and
+			// running before we take requests out of the queue and start sending them
+			// to the upstream. Startup phase is limited to 10 seconds and it is in
+			// addition to whatever timeout is set for the lambda.
+			// If start fails, it rudely kills the process so no need to do anything
+			// here. Inside a container, once we are killed, so will every other
+			// process, so no need to do anything here to catch it.
+			go lambda.StartWithOptions(handle, lambda.WithEnableSIGTERM())
 			break
 		}
 		select {
@@ -228,6 +224,8 @@ StartupRequest:
 		default:
 			time.Sleep(100 * time.Millisecond)
 		}
+		// The reason we don't have our own timeout for this stage is that it'll be
+		// redundant in presence of Lambda's own timeout.
 	}
 
 	// Wait for process/lambda to stop.
