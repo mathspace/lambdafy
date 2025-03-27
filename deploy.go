@@ -358,6 +358,9 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 					Arn:     fnCfg.Configuration.FunctionArn,
 					RoleArn: fnCfg.Configuration.Role,
 					Input:   aws.String(string(payload)),
+					RetryPolicy: &schedulertypes.RetryPolicy{
+						MaximumRetryAttempts: aws.Int32(0), // No retries,
+					},
 				},
 				FlexibleTimeWindow: &schedulertypes.FlexibleTimeWindow{
 					Mode: schedulertypes.FlexibleTimeWindowModeOff,
