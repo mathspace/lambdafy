@@ -27,7 +27,7 @@ jobs:
       - name: Go Generate
         run: go generate
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v2
+        uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: latest
