@@ -160,6 +160,7 @@ role: generate
 # sqs_triggers:
 #   - arn: arn:aws:sqs:us-east-1:123456789012:my-queue
 #     batch_size: 1
+#     concurrency: 10  # Max number of inflight requests to the function
 
 # cron defines the map of cron trigger name to its cron definition. When each
 # cron fires, it will send an empty POST request to /_lambdafy/cron?name=<name>
