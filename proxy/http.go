@@ -104,9 +104,7 @@ func handleHTTP(ctx context.Context, req events.APIGatewayV2HTTPRequest) (res ev
 		} else if len(vs) == 1 {
 			res.Headers[k] = vs[0]
 		} else {
-			for _, v := range vs {
-				res.MultiValueHeaders[k] = append(res.MultiValueHeaders[k], v)
-			}
+			res.MultiValueHeaders[k] = append(res.MultiValueHeaders[k], vs...)
 		}
 	}
 	res.Headers["Via"] = "1.1 lambdafy (" + version + ")"

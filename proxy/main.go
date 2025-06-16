@@ -160,7 +160,7 @@ func run() (exitCode int, err error) {
 
 	// Pass through all signals to the child process
 
-	sigs := make(chan os.Signal)
+	sigs := make(chan os.Signal, 1)
 	go func() {
 		for s := range sigs {
 			_ = cmd.Process.Signal(s)
@@ -174,8 +174,8 @@ func run() (exitCode int, err error) {
 	go func() {
 		defer close(processStopped)
 		if err := cmd.Wait(); err != nil {
-			if err, ok := err.(*exec.ExitError); ok {
-				log.Printf("command exited with code: %d", err.ExitCode())
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				log.Printf("command exited with code: %d", exitErr.ExitCode())
 			} else {
 				log.Printf("error: waiting for command: %s", err)
 			}
