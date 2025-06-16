@@ -57,6 +57,9 @@ func alias(fnName string, version string, aliasName string, force bool) error {
 	lambdaCl := lambda.NewFromConfig(acfg)
 
 	verInt, err := resolveVersion(fnName, version)
+	if err != nil {
+		return fmt.Errorf("failed to resolve version: %s", err)
+	}
 
 	if _, err = lambdaCl.CreateAlias(ctx, &lambda.CreateAliasInput{
 		FunctionName:    &fnName,

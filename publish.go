@@ -181,7 +181,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 	// process to create the schedules. This simply passes the responsility of
 	// creating/updating the schedules to the deploy process.
 
-	if spec.CronTriggers != nil && len(spec.CronTriggers) > 0 {
+	if len(spec.CronTriggers) > 0 {
 		for k, v := range spec.CronTriggers {
 			spec.Env[specInEnvCronPrefix+k] = v
 		}
@@ -322,8 +322,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 		tags[k] = v
 	}
 
-	var vpc *lambdatypes.VpcConfig
-	vpc = &lambdatypes.VpcConfig{
+	vpc := &lambdatypes.VpcConfig{
 		SubnetIds:        spec.VPCSubnetIds,
 		SecurityGroupIds: spec.VPCSecurityGroupIds,
 	}

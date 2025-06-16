@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -93,35 +91,6 @@ func retry(ctx context.Context, fn func() error, ignore ...string) error {
 		case <-t.C:
 		}
 	}
-}
-
-// cmdErr returns the stderr of a command if it fails.
-func cmdErr(err error) error {
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		return fmt.Errorf("%s: %s", err, string(exitErr.Stderr))
-	}
-	return err
-}
-
-// copyFile copies a file from src to dst. If dst does not exist, it will be created.
-func copyFile(dst, src string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, in)
-	if err != nil {
-		return err
-	}
-	return out.Close()
 }
 
 // processDockerResponse decodes the JSON line stream of docker daemon

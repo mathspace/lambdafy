@@ -97,7 +97,7 @@ func (a *Spec) MakeAndPush() bool {
 func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 
 	// Replace placeholders in the spec.
-	if vars != nil && len(vars) > 0 {
+	if len(vars) > 0 {
 		varsArr := make([]string, 0, len(vars)*2)
 		for k, v := range vars {
 			varsArr = append(varsArr, k, v)
