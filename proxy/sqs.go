@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -18,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	sqs "github.com/aws/aws-sdk-go-v2/service/sqs"
+	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 )
 
 var sqsARNPat = regexp.MustCompile(`^arn:aws:sqs:([^:]+):([^:]+):(.+)$`)
@@ -168,17 +170,63 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 	}
 	sqsCl := sqs.NewFromConfig(c)
 
-	if _, err := sqsCl.SendMessage(context.Background(), &sqs.SendMessageInput{
-		MessageBody:    aws.String(string(body)),
-		QueueUrl:       aws.String(qURL),
-		MessageGroupId: groupID,
-	}); err != nil {
-		log.Printf("error sending SQS message: %v", err)
-		http.Error(w, fmt.Sprintf("Error sending SQS message: %v", err), http.StatusInternalServerError)
-		return
-	}
+	// Check if body starts with '[' to detect JSON array (multiple messages)
+	if len(body) > 0 && body[0] == '[' {
+		// Multiple messages - parse and use batch send
+		var messages []json.RawMessage
+		if err := json.Unmarshal(body, &messages); err != nil {
+			http.Error(w, "Invalid JSON array", http.StatusBadRequest)
+			return
+		}
 
-	log.Printf("sent an SQS message to '%s'", qURL)
+		if len(messages) == 0 {
+			http.Error(w, "Empty message array", http.StatusBadRequest)
+			return
+		}
+
+		// Build entries for batch send (split into groups of 10)
+		var allEntries []sqstypes.SendMessageBatchRequestEntry
+		for i, msg := range messages {
+			allEntries = append(allEntries, sqstypes.SendMessageBatchRequestEntry{
+				Id:             aws.String(fmt.Sprintf("msg-%d", i)),
+				MessageBody:    aws.String(string(msg)),
+				MessageGroupId: groupID,
+			})
+		}
+
+		// Send in batches of 10 (SQS limit)
+		for i := 0; i < len(allEntries); i += 10 {
+			end := i + 10
+			if end > len(allEntries) {
+				end = len(allEntries)
+			}
+			batch := allEntries[i:end]
+
+			if _, err := sqsCl.SendMessageBatch(context.Background(), &sqs.SendMessageBatchInput{
+				QueueUrl: aws.String(qURL),
+				Entries:  batch,
+			}); err != nil {
+				log.Printf("error sending SQS message batch: %v", err)
+				http.Error(w, fmt.Sprintf("Error sending SQS message batch: %v", err), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		log.Printf("sent %d SQS messages to '%s'", len(messages), qURL)
+	} else {
+		// Single message - use regular send
+		if _, err := sqsCl.SendMessage(context.Background(), &sqs.SendMessageInput{
+			MessageBody:    aws.String(string(body)),
+			QueueUrl:       aws.String(qURL),
+			MessageGroupId: groupID,
+		}); err != nil {
+			log.Printf("error sending SQS message: %v", err)
+			http.Error(w, fmt.Sprintf("Error sending SQS message: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("sent an SQS message to '%s'", qURL)
+	}
 
 }
 
