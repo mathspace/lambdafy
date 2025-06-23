@@ -23,6 +23,8 @@ import (
 	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 )
 
+const maxSQSBatchSize = 10 // SQS allows a maximum of 10 messages per batch
+
 var sqsARNPat = regexp.MustCompile(`^arn:aws:sqs:([^:]+):([^:]+):(.+)$`)
 
 // getSQSQueueURL returns the URL of the SQS queue given its ARN.
@@ -214,9 +216,8 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
-		// Send in batches of 10 (SQS limit)
-		for i := 0; i < len(allEntries); i += 10 {
-			end := i + 10
+		for i := 0; i < len(allEntries); i += maxSQSBatchSize {
+			end := i + maxSQSBatchSize
 			if end > len(allEntries) {
 				end = len(allEntries)
 			}
