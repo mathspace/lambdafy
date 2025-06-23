@@ -193,7 +193,7 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 	sqsCl := sqs.NewFromConfig(c)
 
 	if len(body) > 0 && isBatchMessage {
-		var messages []json.RawMessage
+		var messages []string
 		if err := json.Unmarshal(body, &messages); err != nil {
 			http.Error(w, "Invalid JSON array", http.StatusBadRequest)
 			return
@@ -209,7 +209,7 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 		for i, msg := range messages {
 			allEntries = append(allEntries, sqstypes.SendMessageBatchRequestEntry{
 				Id:             aws.String(fmt.Sprintf("msg-%d", i)),
-				MessageBody:    aws.String(string(msg)),
+				MessageBody:    aws.String(msg),
 				MessageGroupId: groupID,
 			})
 		}
