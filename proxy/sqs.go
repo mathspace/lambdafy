@@ -168,24 +168,6 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 		groupID = &g
 	}
 
-	isBatchMessage := r.Header.Get(batchMessageHeader) != ""
-	// Check if the Content-Type media type is application/json
-	// instead of direct string equality check, as it may contain additional parameters.
-	if isBatchMessage {
-		contentType := r.Header.Get("Content-Type")
-		mediaType, _, err := mime.ParseMediaType(contentType)
-
-		if err != nil {
-			log.Printf("error parsing Content-Type header: %v", err)
-			http.Error(w, fmt.Sprintf("Error parsing Content-Type header: %v", err), http.StatusBadRequest)
-			return
-		}
-		if mediaType != "application/json" {
-			http.Error(w, "Content-Type must be application/json for batch messages", http.StatusBadRequest)
-			return
-		}
-	}
-
 	c, err := awsconfig.LoadDefaultConfig(context.Background())
 	if err != nil {
 		log.Printf("error loading AWS config: %v", err)
@@ -194,46 +176,9 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 	}
 	sqsCl := sqs.NewFromConfig(c)
 
-	if len(body) > 0 && isBatchMessage {
-		var messages []string
-		if err := json.Unmarshal(body, &messages); err != nil {
-			http.Error(w, "Invalid JSON array", http.StatusBadRequest)
-			return
-		}
-
-		if len(messages) == 0 {
-			http.Error(w, "Empty message array", http.StatusBadRequest)
-			return
-		}
-
-		for i := 0; i < len(messages); i += maxSQSBatchSize {
-			end := i + maxSQSBatchSize
-			if end > len(messages) {
-				end = len(messages)
-			}
-			messageBatch := messages[i:end]
-			entryBatch := make([]sqstypes.SendMessageBatchRequestEntry, len(messageBatch))
-			for j, msg := range messageBatch {
-				entryBatch[j] = sqstypes.SendMessageBatchRequestEntry{
-					Id:             aws.String(fmt.Sprintf("%d", j)),
-					MessageBody:    aws.String(msg),
-					MessageGroupId: groupID,
-				}
-			}
-
-			if _, err := sqsCl.SendMessageBatch(context.Background(), &sqs.SendMessageBatchInput{
-				QueueUrl: aws.String(qURL),
-				Entries:  entryBatch,
-			}); err != nil {
-				log.Printf("error sending SQS message batch: %v", err)
-				http.Error(w, fmt.Sprintf("Error sending SQS message batch: %v", err), http.StatusInternalServerError)
-				return
-			}
-		}
-
-		log.Printf("sent %d SQS messages to '%s'", len(messages), qURL)
-	} else {
-		// Single message - use regular send
+	isBatchMessage := r.Header.Get(batchMessageHeader) != ""
+	// Single message - use regular send
+	if !isBatchMessage {
 		if _, err := sqsCl.SendMessage(context.Background(), &sqs.SendMessageInput{
 			MessageBody:    aws.String(string(body)),
 			QueueUrl:       aws.String(qURL),
@@ -245,8 +190,64 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Printf("sent an SQS message to '%s'", qURL)
+		return
 	}
 
+	// Batch send message - expect the correct Content-Type and
+	// a JSON array of string messages in the request body
+
+	// Check if the Content-Type media type is application/json
+	// instead of direct string equality check, as it may contain additional parameters.
+	contentType := r.Header.Get("Content-Type")
+	mediaType, _, err := mime.ParseMediaType(contentType)
+
+	if err != nil {
+		log.Printf("error parsing Content-Type header: %v", err)
+		http.Error(w, fmt.Sprintf("Error parsing Content-Type header: %v", err), http.StatusBadRequest)
+		return
+	}
+	if mediaType != "application/json" {
+		http.Error(w, "Content-Type must be application/json for batch messages", http.StatusBadRequest)
+		return
+	}
+
+	var messages []string
+	if err := json.Unmarshal(body, &messages); err != nil {
+		http.Error(w, "Invalid JSON array", http.StatusBadRequest)
+		return
+	}
+
+	if len(messages) == 0 {
+		http.Error(w, "Empty message array", http.StatusBadRequest)
+		return
+	}
+
+	for i := 0; i < len(messages); i += maxSQSBatchSize {
+		end := i + maxSQSBatchSize
+		if end > len(messages) {
+			end = len(messages)
+		}
+		messageBatch := messages[i:end]
+		entryBatch := make([]sqstypes.SendMessageBatchRequestEntry, len(messageBatch))
+		for j, msg := range messageBatch {
+			entryBatch[j] = sqstypes.SendMessageBatchRequestEntry{
+				Id:             aws.String(fmt.Sprintf("%d", j)),
+				MessageBody:    aws.String(msg),
+				MessageGroupId: groupID,
+			}
+		}
+
+		if _, err := sqsCl.SendMessageBatch(context.Background(), &sqs.SendMessageBatchInput{
+			QueueUrl: aws.String(qURL),
+			Entries:  entryBatch,
+		}); err != nil {
+			log.Printf("error sending SQS message batch: %v", err)
+			http.Error(w, fmt.Sprintf("Error sending SQS message batch: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	log.Printf("sent %d SQS messages to '%s'", len(messages), qURL)
 }
 
 const sendSQSStarenvTag = "lambdafy_sqs_send"
