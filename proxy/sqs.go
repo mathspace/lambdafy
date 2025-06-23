@@ -208,7 +208,7 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 		var allEntries []sqstypes.SendMessageBatchRequestEntry
 		for i, msg := range messages {
 			allEntries = append(allEntries, sqstypes.SendMessageBatchRequestEntry{
-				Id:             aws.String(fmt.Sprintf("msg-%d", i)),
+				Id:             aws.String(fmt.Sprintf("%d", i)),
 				MessageBody:    aws.String(msg),
 				MessageGroupId: groupID,
 			})
