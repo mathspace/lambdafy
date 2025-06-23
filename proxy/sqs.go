@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"mime"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -130,10 +131,13 @@ func (d sqsSendDerefer) Deref(arn string) (string, error) {
 var sqsIDToQueueURL = sqsSendDerefer{}
 
 const sqsGroupIDHeader = "Lambdafy-SQS-Group-Id"
+const batchMessageHeader = "Lambdafy-SQS-Batch-Message"
 
 // handleSQSSend handles HTTP POST requests and translates them to SQS send
 // message.
 // Lambdafy-SQS-Group-Id header is used to set the message group ID.
+// Lambdafy-SQS-Batch-Message header is used to indicate that the request body
+// contains a JSON array of messages to be sent in a batch.
 func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -162,6 +166,24 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 		groupID = &g
 	}
 
+	isBatchMessage := r.Header.Get(batchMessageHeader) != ""
+	// Check if the Content-Type media type is application/json
+	// instead of direct string equality check, as it may contain additional parameters.
+	if isBatchMessage {
+		contentType := r.Header.Get("Content-Type")
+		mediaType, _, err := mime.ParseMediaType(contentType)
+
+		if err != nil {
+			log.Printf("error parsing Content-Type header: %v", err)
+			http.Error(w, fmt.Sprintf("Error parsing Content-Type header: %v", err), http.StatusBadRequest)
+			return
+		}
+		if mediaType != "application/json" {
+			http.Error(w, "Content-Type must be application/json for batch messages", http.StatusBadRequest)
+			return
+		}
+	}
+
 	c, err := awsconfig.LoadDefaultConfig(context.Background())
 	if err != nil {
 		log.Printf("error loading AWS config: %v", err)
@@ -170,9 +192,7 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 	}
 	sqsCl := sqs.NewFromConfig(c)
 
-	// Check if body starts with '[' to detect JSON array (multiple messages)
-	if len(body) > 0 && body[0] == '[' {
-		// Multiple messages - parse and use batch send
+	if len(body) > 0 && isBatchMessage {
 		var messages []json.RawMessage
 		if err := json.Unmarshal(body, &messages); err != nil {
 			http.Error(w, "Invalid JSON array", http.StatusBadRequest)
