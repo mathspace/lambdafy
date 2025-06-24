@@ -221,30 +221,27 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Empty message array", http.StatusBadRequest)
 		return
 	}
+	if len(messages) > maxSQSBatchSize {
+		http.Error(w, fmt.Sprintf("Too many messages in batch, maximum is %d", maxSQSBatchSize), http.StatusBadRequest)
+		return
+	}
 
-	for i := 0; i < len(messages); i += maxSQSBatchSize {
-		end := i + maxSQSBatchSize
-		if end > len(messages) {
-			end = len(messages)
+	entries := make([]sqstypes.SendMessageBatchRequestEntry, len(messages))
+	for j, msg := range messages {
+		entries[j] = sqstypes.SendMessageBatchRequestEntry{
+			Id:             aws.String(fmt.Sprintf("%d", j)),
+			MessageBody:    aws.String(msg),
+			MessageGroupId: groupID,
 		}
-		messageBatch := messages[i:end]
-		entryBatch := make([]sqstypes.SendMessageBatchRequestEntry, len(messageBatch))
-		for j, msg := range messageBatch {
-			entryBatch[j] = sqstypes.SendMessageBatchRequestEntry{
-				Id:             aws.String(fmt.Sprintf("%d", j)),
-				MessageBody:    aws.String(msg),
-				MessageGroupId: groupID,
-			}
-		}
+	}
 
-		if _, err := sqsCl.SendMessageBatch(context.Background(), &sqs.SendMessageBatchInput{
-			QueueUrl: aws.String(qURL),
-			Entries:  entryBatch,
-		}); err != nil {
-			log.Printf("error sending SQS message batch: %v", err)
-			http.Error(w, fmt.Sprintf("Error sending SQS message batch: %v", err), http.StatusInternalServerError)
-			return
-		}
+	if _, err := sqsCl.SendMessageBatch(context.Background(), &sqs.SendMessageBatchInput{
+		QueueUrl: aws.String(qURL),
+		Entries:  entries,
+	}); err != nil {
+		log.Printf("error sending SQS message batch: %v", err)
+		http.Error(w, fmt.Sprintf("Error sending SQS message batch: %v", err), http.StatusInternalServerError)
+		return
 	}
 
 	log.Printf("sent %d SQS messages to '%s'", len(messages), qURL)
