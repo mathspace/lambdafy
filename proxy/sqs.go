@@ -235,12 +235,47 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if _, err := sqsCl.SendMessageBatch(context.Background(), &sqs.SendMessageBatchInput{
-		QueueUrl: aws.String(qURL),
-		Entries:  entries,
-	}); err != nil {
-		log.Printf("error sending SQS message batch: %v", err)
-		http.Error(w, fmt.Sprintf("Error sending SQS message batch: %v", err), http.StatusInternalServerError)
+	var attempts int = 0
+	var retryable_entries []sqstypes.SendMessageBatchRequestEntry = entries
+	var nonRetryableEntries []sqstypes.SendMessageBatchRequestEntry = nil
+
+	for (attempts == 0 || len(retryable_entries) > 0) && attempts < 5 {
+		attempts++
+		if output, err := sqsCl.SendMessageBatch(context.Background(), &sqs.SendMessageBatchInput{
+			QueueUrl: aws.String(qURL),
+			Entries:  retryable_entries,
+		}); err != nil {
+			log.Printf("error sending SQS message batch: %v", err)
+			http.Error(w, fmt.Sprintf("Error sending SQS message batch: %v", err), http.StatusInternalServerError)
+			return
+		} else if len(output.Failed) > 0 {
+			retryable_entries = nil // Reset retryable entries for the next attempt
+			log.Printf("failed to send %d SQS messages in batch", len(output.Failed))
+			for _, f := range output.Failed {
+				fmt.Printf(
+					"failed to send SQS message %s: %s (SenderFault: %t, Code: %s)\n",
+					*f.Id, *f.Message, f.SenderFault, *f.Code,
+				)
+				id, err := strconv.Atoi(*f.Id)
+				if err != nil {
+					log.Printf("error parsing SQS message ID '%s': %v", *f.Id, err)
+					http.Error(w, fmt.Sprintf("Error parsing SQS message ID '%s': %v", *f.Id, err), http.StatusInternalServerError)
+					return
+				}
+				if f.SenderFault {
+					// Non-retryable error
+					nonRetryableEntries = append(nonRetryableEntries, entries[id])
+				} else {
+					// Retryable error
+					retryable_entries = append(retryable_entries, entries[id])
+				}
+			}
+		}
+	}
+
+	if len(retryable_entries)+len(nonRetryableEntries) > 0 {
+		log.Printf("%d of %d SQS messages in batch failed", len(retryable_entries)+len(nonRetryableEntries), len(entries))
+		http.Error(w, fmt.Sprintf("%d of %d SQS messages in batch failed", len(retryable_entries)+len(nonRetryableEntries), len(entries)), http.StatusInternalServerError)
 		return
 	}
 
