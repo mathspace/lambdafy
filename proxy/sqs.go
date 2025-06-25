@@ -213,15 +213,18 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 
 	var messages []string
 	if err := json.Unmarshal(body, &messages); err != nil {
+		log.Printf("Send message batch failure - Invalid JSON array: %v", err)
 		http.Error(w, "Invalid JSON array", http.StatusBadRequest)
 		return
 	}
 
 	if len(messages) == 0 {
+		log.Printf("Send message batch failure - Empty message array")
 		http.Error(w, "Empty message array", http.StatusBadRequest)
 		return
 	}
 	if len(messages) > maxSQSBatchSize {
+		log.Printf("Send message batch failure - Too many messages in batch, maximum is %d", maxSQSBatchSize)
 		http.Error(w, fmt.Sprintf("Too many messages in batch, maximum is %d", maxSQSBatchSize), http.StatusBadRequest)
 		return
 	}
