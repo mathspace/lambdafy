@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -243,6 +244,13 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 	var nonRetryableEntries []sqstypes.SendMessageBatchRequestEntry = nil
 
 	for (attempts == 0 || len(retryable_entries) > 0) && attempts < 5 {
+		// Sleep for exponential backoff on retry
+		if attempts > 0 {
+			// bit shift to calculate the sleep duration -> 500ms, 1s, 2s, 4s, 8s
+			sleepDuration := (1 << attempts) * 500 // Exponential backoff in milliseconds
+			time.Sleep(time.Duration(sleepDuration) * time.Millisecond)
+		}
+
 		attempts++
 		output, err := sqsCl.SendMessageBatch(context.Background(), &sqs.SendMessageBatchInput{
 			QueueUrl: aws.String(qURL),
