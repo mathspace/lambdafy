@@ -241,15 +241,17 @@ func handleSQSSend(w http.ResponseWriter, r *http.Request) {
 
 	for (attempts == 0 || len(retryable_entries) > 0) && attempts < 5 {
 		attempts++
-		if output, err := sqsCl.SendMessageBatch(context.Background(), &sqs.SendMessageBatchInput{
+		output, err := sqsCl.SendMessageBatch(context.Background(), &sqs.SendMessageBatchInput{
 			QueueUrl: aws.String(qURL),
 			Entries:  retryable_entries,
-		}); err != nil {
+		})
+		if err != nil {
 			log.Printf("error sending SQS message batch: %v", err)
 			http.Error(w, fmt.Sprintf("Error sending SQS message batch: %v", err), http.StatusInternalServerError)
 			return
-		} else if len(output.Failed) > 0 {
-			retryable_entries = nil // Reset retryable entries for the next attempt
+		}
+		retryable_entries = nil // Reset retryable entries for the next attempt
+		if len(output.Failed) > 0 {
 			log.Printf("failed to send %d SQS messages in batch", len(output.Failed))
 			for _, f := range output.Failed {
 				fmt.Printf(
