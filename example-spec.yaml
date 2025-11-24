@@ -56,9 +56,11 @@ role: generate
 #   the starenv derefers, lambdafy adds the following derefers:
 #
 #   - lambdafy_sqs_send: This derefer will be replaced with a URL which when POSTed
-#     to will send a message to the SQS queue whose ARN is specified. The body
-#     of the POST will be sent as the SQS message body. If header
-#     'Lambdafy-SQS-Group-Id' is set, it will be used as Group ID for the
+#     to will send a message to the SQS queue whose ARN is specified. This accepts
+#     either a JSON array of messages or a single message. If an array, the body
+#     of the POST will be split into batches and sent as entries in SQS send message batch.
+#     Otherwise, if a single messsage, the body of the POST will be sent as the SQS message body.
+#     If header 'Lambdafy-SQS-Group-Id' is set, it will be used as Group ID for the
 #     message. A 2xx/3xx response is considered a success, otherwise a fail. See
 #     the example below for usage.
 #     Note: The necessary IAM role permissions to send SQS messages are added
