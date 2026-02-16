@@ -26,7 +26,7 @@ func canonicalizePolicyString(s string, urlenc bool) (string, error) {
 			return "", err
 		}
 	}
-	var p interface{}
+	var p any
 	if err := json.Unmarshal([]byte(s), &p); err != nil {
 		return "", err
 	}

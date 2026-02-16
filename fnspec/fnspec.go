@@ -4,7 +4,7 @@ package fnspec
 import (
 	"errors"
 	"io"
-	"io/ioutil"
+
 	"regexp"
 	"strings"
 
@@ -103,7 +103,7 @@ func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 			varsArr = append(varsArr, k, v)
 		}
 		rpl := strings.NewReplacer(varsArr...)
-		sptxt, err := ioutil.ReadAll(r)
+		sptxt, err := io.ReadAll(r)
 		if err != nil {
 			return nil, err
 		}

@@ -23,7 +23,7 @@ var (
 )
 
 // formatOutput formats the output of a command.
-func formatOutput(v interface{}) error {
+func formatOutput(v any) error {
 
 	// Encode to JSON because we will either decode it to a simple map for
 	// templating or print it as is if no template is provided. The reason for this
@@ -43,7 +43,7 @@ func formatOutput(v interface{}) error {
 		return nil
 	}
 
-	var w interface{}
+	var w any
 	if err := json.Unmarshal(b.Bytes(), &w); err != nil {
 		return fmt.Errorf("failed to decode output: %s", err)
 	}

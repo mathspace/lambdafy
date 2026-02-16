@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
+
 	"log"
 	"math/rand"
 	"mime"
@@ -83,7 +83,7 @@ func handleSQS(ctx context.Context, e events.SQSEvent) (resp events.SQSEventResp
 
 				// Failure
 
-				b, err := ioutil.ReadAll(resp.Body)
+				b, err := io.ReadAll(resp.Body)
 				if err != nil {
 					return fmt.Errorf("error reading response body: %v", err)
 				}

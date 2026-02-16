@@ -432,7 +432,7 @@ func prime(ctx context.Context, url string, num int) error {
 	wg.Add(num)
 	errCh := make(chan error, num)
 
-	for i := 0; i < num; i++ {
+	for range num {
 		go func() {
 			defer wg.Done()
 			conseqSuccess := 0

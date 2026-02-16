@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"os"
 	"regexp"
 	"strings"
@@ -318,9 +319,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 	tags := make(map[string]string, len(spec.Tags))
 	tags["Name"] = spec.Name
-	for k, v := range spec.Tags {
-		tags[k] = v
-	}
+	maps.Copy(tags, spec.Tags)
 
 	vpc := &lambdatypes.VpcConfig{
 		SubnetIds:        spec.VPCSubnetIds,

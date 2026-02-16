@@ -3,7 +3,8 @@ package main
 import (
 	"embed"
 	"fmt"
-	"io/ioutil"
+	"io/fs"
+
 	"log"
 	"os"
 	"path/filepath"
@@ -74,7 +75,7 @@ var createSampleProjectCmd = &cobra.Command{
 			p := filepath.Join(sampleProjectDir, f.Name())
 			b, _ := sampleProject.ReadFile(p)
 			outPath := filepath.Join(outDir, f.Name())
-			if err := ioutil.WriteFile(outPath, b, 0644); err != nil {
+			if err := os.WriteFile(outPath, b, 0644); err != nil {
 				return fmt.Errorf("failed to write file %s: %w", outPath, err)
 			}
 		}
