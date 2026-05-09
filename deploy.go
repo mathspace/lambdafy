@@ -13,6 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/scheduler"
@@ -249,12 +250,37 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 	}
 	lambdaCl := lambda.NewFromConfig(acfg)
 
+	fnCfg, err := lambdaCl.GetFunction(ctx, &lambda.GetFunctionInput{
+		FunctionName: &fnName,
+		Qualifier:    aws.String(strconv.Itoa(version)),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to get function config: %s", err)
+	}
+	var env map[string]string
+	if fnCfg.Configuration.Environment != nil {
+		env = fnCfg.Configuration.Environment.Variables
+	}
+
+	retentionDays, err := logGroupRetentionDaysFromSpecEnv(env)
+	if err != nil {
+		return "", err
+	}
+	log.Printf("ensuring log group retention is %d days", retentionDays)
+
+	ctxTo, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	logsCl := cloudwatchlogs.NewFromConfig(acfg)
+	if err := ensureLogGroupRetention(ctxTo, logsCl, fnName, retentionDays); err != nil {
+		return "", err
+	}
+
 	// Prepare preactive deploy:
 	// Once we ensure the function works, we will switch the active alias to point to this version.
 
 	log.Printf("deploying to staging endpoint for testing")
 
-	ctxTo, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	ctxTo, cancel = context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	preactiveFnURL, err := prepareDeploy(ctxTo, lambdaCl, fnName, version, preactiveAlias)
 	if err != nil {
@@ -313,17 +339,9 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 
 	// Load env vars from function config and extract cron defs from it.
 
-	fnCfg, err := lambdaCl.GetFunction(ctx, &lambda.GetFunctionInput{
-		FunctionName: &fnName,
-		Qualifier:    aws.String(strconv.Itoa(version)),
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to get function config: %s", err)
-	}
 	crons := make(map[string]string)
-	env := fnCfg.Configuration.Environment
 	if env != nil {
-		for k, v := range env.Variables {
+		for k, v := range env {
 			if !strings.HasPrefix(k, specInEnvCronPrefix) {
 				continue
 			}

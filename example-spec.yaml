@@ -101,6 +101,14 @@ role: generate
 #
 # timeout: 3
 
+# log_group_retention_days sets CloudWatch Logs retention for the
+# /aws/lambda/<name> log group. lambdafy checks and updates the retention policy
+# during deploy. Defaults to 90. Allowed values are 1, 3, 5, 7, 14, 30, 60, 90,
+# 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, and
+# 3653.
+#
+# log_group_retention_days: 90
+
 # tags will be applied to the function as regular AWS resource tags.
 # Tag `Name` will be applied by default set to the function name defined
 # above. It can be overriden here.

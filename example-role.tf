@@ -34,6 +34,23 @@ resource "aws_iam_user_policy" "lambdafy" {
     {
       "Effect": "Allow",
       "Action": [
+        "logs:DescribeLogGroups"
+      ],
+      "Resource": ["*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:PutRetentionPolicy"
+      ],
+      "Resource": [
+        "arn:aws:logs:*:*:log-group:/aws/lambda/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
         "scheduler:DeleteScheduleGroup",
         "scheduler:CreateScheduleGroup",
         "scheduler:CreateSchedule",

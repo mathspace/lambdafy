@@ -16,7 +16,36 @@ import (
 // generated.
 const RoleGenerate = "generate"
 
+// DefaultLogGroupRetentionDays is the default CloudWatch Logs retention for
+// Lambda log groups managed by lambdafy.
+const DefaultLogGroupRetentionDays int32 = 90
+
 var ecrRepoPat = regexp.MustCompile(`^\d+\.dkr\.ecr\.[^.]+\.amazonaws\.com/`)
+
+var validLogGroupRetentionDays = map[int32]bool{
+	1:    true,
+	3:    true,
+	5:    true,
+	7:    true,
+	14:   true,
+	30:   true,
+	60:   true,
+	90:   true,
+	120:  true,
+	150:  true,
+	180:  true,
+	365:  true,
+	400:  true,
+	545:  true,
+	731:  true,
+	1096: true,
+	1827: true,
+	2192: true,
+	2557: true,
+	2922: true,
+	3288: true,
+	3653: true,
+}
 
 // EFSMount represents an AWS Elastic Filesystem mount.
 type EFSMount struct {
@@ -61,6 +90,7 @@ type Spec struct {
 	WorkDir               *string           `yaml:"workdir,omitempty"`
 	Memory                *int32            `yaml:"memory,omitempty"`
 	Timeout               *int32            `yaml:"timeout,omitempty"`
+	LogGroupRetentionDays *int32            `yaml:"log_group_retention_days,omitempty"`
 	Tags                  map[string]string `yaml:"tags,omitempty"`
 	VPCSecurityGroupIds   []string          `yaml:"vpc_security_group_ids,omitempty"`
 	VPCSubnetIds          []string          `yaml:"vpc_subnet_ids,omitempty"`
@@ -91,6 +121,12 @@ func (a *Spec) IsAccountRegionAllowed(account, region string) bool {
 // MakeAndPush returns true if the image should be built and pushed to ECR.
 func (a *Spec) MakeAndPush() bool {
 	return !ecrRepoPat.MatchString(a.Image)
+}
+
+// IsValidLogGroupRetentionDays returns true when days is accepted by
+// CloudWatch Logs PutRetentionPolicy.
+func IsValidLogGroupRetentionDays(days int32) bool {
+	return validLogGroupRetentionDays[days]
 }
 
 // Load loads the spec from the given reader.
@@ -132,6 +168,13 @@ func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 	}
 	if s.Timeout != nil && (*s.Timeout < 3 || *s.Timeout > 900) {
 		return nil, errors.New("timeout spec must be between 3 and 900")
+	}
+	if s.LogGroupRetentionDays == nil {
+		days := DefaultLogGroupRetentionDays
+		s.LogGroupRetentionDays = &days
+	}
+	if !IsValidLogGroupRetentionDays(*s.LogGroupRetentionDays) {
+		return nil, errors.New("log_group_retention_days must be one of 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, or 3653")
 	}
 	if s.TempSize != nil && (*s.TempSize < 512 || *s.TempSize > 10240) {
 		return nil, errors.New("temp_size spec must be between 512 and 10240")

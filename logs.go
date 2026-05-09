@@ -76,7 +76,7 @@ func logs(fnName string, version int, since time.Time, afterToken string) (fnLog
 	}
 	logsCl := cloudwatchlogs.NewFromConfig(acfg)
 
-	logGroupName := aws.String(fmt.Sprintf("/aws/lambda/%s", fnName))
+	logGroupName := aws.String(lambdaLogGroupName(fnName))
 
 	// This is a hack to get the logs for a specific version. To cater for
 	// logstreams that start just before a new date or run for multiple days, we

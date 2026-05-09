@@ -73,6 +73,7 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 	spec.Description = *gfo.Configuration.Description
 	spec.Image = *gfo.Code.ImageUri
 	spec.Role = *gfo.Configuration.Role
+	retentionDays := fnspec.DefaultLogGroupRetentionDays
 
 	if env := gfo.Configuration.Environment; env != nil {
 		spec.Env = env.Variables
@@ -91,6 +92,12 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 			spec.CORS.Origins = c.Origins
 			spec.CORS.Methods = c.Methods
 			spec.CORS.Headers = c.Headers
+		}
+
+		if d, err := logGroupRetentionDaysFromSpecEnv(spec.Env); err != nil {
+			return spec, err
+		} else {
+			retentionDays = d
 		}
 
 		// Parse cron spec
@@ -114,6 +121,7 @@ func generateSpec(fnName string, fnVersion int) (fnspec.Spec, error) {
 			}
 		}
 	}
+	spec.LogGroupRetentionDays = &retentionDays
 
 	if icr := gfo.Configuration.ImageConfigResponse; icr != nil {
 		if imc := icr.ImageConfig; imc != nil {
