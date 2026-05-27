@@ -1,7 +1,6 @@
-// There are two roles in this example:
+// There are two IAM resources in this example:
 //
-// 1. The role that lambdafy tool requires to be able to create and manage the
-//    functions (lambdafy).
+// 1. The IAM user that lambdafy tool uses to create and manage functions.
 
 resource "aws_iam_user" "lambdafy" {
   name = "lambdafy-cli"
@@ -23,9 +22,6 @@ resource "aws_iam_user_policy" "lambdafy" {
       "Effect": "Allow",
       "Action": [
         "iam:GetRole",
-        "iam:GetRolePolicy",
-        "iam:ListAttachedRolePolicies",
-        "iam:ListRolePolicies",
         "iam:PassRole",
         "iam:SimulatePrincipalPolicy"
       ],
@@ -61,17 +57,6 @@ resource "aws_iam_user_policy" "lambdafy" {
     {
       "Effect": "Allow",
       "Action": [
-        "iam:CreateRole",
-        "iam:PutRolePolicy",
-        "iam:UpdateRole"
-      ],
-      "Resource": [
-        "arn:aws:iam::*:role/lambdafy-*"
-      ]
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
         "ecr:*"
       ],
       "Resource": ["*"]
@@ -91,7 +76,7 @@ EOF
 }
 
 // 2. The role for the Lambda function itself (fn) - this is not needed if
-//    'role: generate' is used in the lambdafy spec.
+//    you already have an equivalent execution role.
 
 resource "aws_iam_role" "fn" {
   name               = "my-custom-function"
