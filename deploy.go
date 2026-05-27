@@ -14,10 +14,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/scheduler"
 	schedulertypes "github.com/aws/aws-sdk-go-v2/service/scheduler/types"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/mathspace/lambdafy/fnspec"
 	"github.com/spf13/cobra"
 )
@@ -186,22 +188,12 @@ func prepareDeploy(ctx context.Context, lambdaCl *lambda.Client, fnName string, 
 
 // enableSQSTrigggers enables or disables all SQS triggers for the given function alias.
 func enableSQSTriggers(ctx context.Context, lambdaCl *lambda.Client, fnName string, version int, enable bool) error {
-	lst := []lambdatypes.EventSourceMappingConfiguration{}
-	ems := lambda.NewListEventSourceMappingsPaginator(lambdaCl, &lambda.ListEventSourceMappingsInput{
-		FunctionName: aws.String(fmt.Sprintf("%s:%d", fnName, version)),
-	})
-	for ems.HasMorePages() {
-		es, err := ems.NextPage(ctx)
-		if err != nil {
-			return err
-		}
-		lst = append(lst, es.EventSourceMappings...)
+	lst, err := listSQSEventSourceMappings(ctx, lambdaCl, fmt.Sprintf("%s:%d", fnName, version))
+	if err != nil {
+		return err
 	}
 
 	for _, em := range lst {
-		if !strings.HasPrefix(*em.EventSourceArn, "arn:aws:sqs:") {
-			continue
-		}
 		if err := retryOnResourceConflict(ctx, func() error {
 			_, err := lambdaCl.UpdateEventSourceMapping(ctx, &lambda.UpdateEventSourceMappingInput{
 				UUID:    em.UUID,
@@ -238,7 +230,41 @@ func enableSQSTriggers(ctx context.Context, lambdaCl *lambda.Client, fnName stri
 	return nil
 }
 
-// publish publishes the lambda function to AWS and returns the function URL.
+func listSQSEventSourceMappings(ctx context.Context, lambdaCl *lambda.Client, functionName string) ([]lambdatypes.EventSourceMappingConfiguration, error) {
+	var lst []lambdatypes.EventSourceMappingConfiguration
+	ems := lambda.NewListEventSourceMappingsPaginator(lambdaCl, &lambda.ListEventSourceMappingsInput{
+		FunctionName: aws.String(functionName),
+	})
+	for ems.HasMorePages() {
+		es, err := ems.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, em := range es.EventSourceMappings {
+			if em.EventSourceArn == nil || !strings.HasPrefix(*em.EventSourceArn, "arn:aws:sqs:") {
+				continue
+			}
+			lst = append(lst, em)
+		}
+	}
+	return lst, nil
+}
+
+func cronTriggersFromEnv(env map[string]string) map[string]string {
+	crons := make(map[string]string)
+	for k, v := range env {
+		if !strings.HasPrefix(k, specInEnvCronPrefix) {
+			continue
+		}
+		crons[k[len(specInEnvCronPrefix):]] = v
+	}
+	if len(crons) == 0 {
+		return nil
+	}
+	return crons
+}
+
+// deploy routes a published lambda function version to the public endpoint.
 func deploy(fnName string, version int, primeCount int) (string, error) {
 	ctx := context.Background()
 
@@ -260,6 +286,52 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 	var env map[string]string
 	if fnCfg.Configuration.Environment != nil {
 		env = fnCfg.Configuration.Environment.Variables
+	}
+	crons := cronTriggersFromEnv(env)
+	if fnCfg.Configuration.Role == nil || *fnCfg.Configuration.Role == "" {
+		return "", fmt.Errorf("function %q version %d has no execution role", fnName, version)
+	}
+	if len(crons) > 0 && (fnCfg.Configuration.FunctionArn == nil || *fnCfg.Configuration.FunctionArn == "") {
+		return "", fmt.Errorf("function %q version %d has no function ARN", fnName, version)
+	}
+
+	stsCl := sts.NewFromConfig(acfg)
+	cid, err := stsCl.GetCallerIdentity(ctx, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to get aws account number: %s", err)
+	}
+	sourceFunctionARN := lambdaFunctionARN(*cid.Account, acfg.Region, fnName)
+	if fnCfg.Configuration.FunctionArn != nil && *fnCfg.Configuration.FunctionArn != "" {
+		sourceFunctionARN = unqualifiedLambdaFunctionARN(*fnCfg.Configuration.FunctionArn)
+	}
+	roleSpec := &fnspec.Spec{
+		Name:         fnName,
+		Role:         roleNameFromRoleARN(*fnCfg.Configuration.Role),
+		Env:          env,
+		CronTriggers: crons,
+	}
+	if fnCfg.Configuration.VpcConfig != nil {
+		roleSpec.VPCSecurityGroupIds = fnCfg.Configuration.VpcConfig.SecurityGroupIds
+		roleSpec.VPCSubnetIds = fnCfg.Configuration.VpcConfig.SubnetIds
+	}
+	sqsMappings, err := listSQSEventSourceMappings(ctx, lambdaCl, fmt.Sprintf("%s:%d", fnName, version))
+	if err != nil {
+		return "", fmt.Errorf("failed to list SQS triggers: %s", err)
+	}
+	for _, mapping := range sqsMappings {
+		roleSpec.SQSTriggers = append(roleSpec.SQSTriggers, &fnspec.SQSTrigger{
+			ARN: *mapping.EventSourceArn,
+		})
+	}
+	iamCl := iam.NewFromConfig(acfg)
+	scope := roleValidationScope{
+		LambdaSourceFunctionARN: sourceFunctionARN,
+	}
+	if len(crons) > 0 {
+		scope.SchedulerTargetARN = *fnCfg.Configuration.FunctionArn
+	}
+	if _, err := resolveAndValidateRole(ctx, iamCl, roleSpec, *cid.Account, acfg.Region, scope); err != nil {
+		return "", err
 	}
 
 	retentionDays, err := logGroupRetentionDaysFromSpecEnv(env)
@@ -334,18 +406,6 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 	}); err != nil {
 		if !strings.Contains(err.Error(), "ResourceNotFoundException") {
 			return "", fmt.Errorf("failed to delete schedule group: %s", err)
-		}
-	}
-
-	// Load env vars from function config and extract cron defs from it.
-
-	crons := make(map[string]string)
-	if env != nil {
-		for k, v := range env {
-			if !strings.HasPrefix(k, specInEnvCronPrefix) {
-				continue
-			}
-			crons[k[len(specInEnvCronPrefix):]] = v
 		}
 	}
 

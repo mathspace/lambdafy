@@ -31,23 +31,11 @@ image: ubuntu
 #
 # repo_name: my-great-app
 
-# role is the name of a IAM role.
+# role is the name of an existing IAM role.
 # Run `lambdafy example-role` to see terraform definition for a basic
-# role needed to run the lambda function.
-# You can let lambdafy generate a role for you by specifying the literal
-# 'generate'. The generated role will be named 'lambdafy-XXXX' where
-# 'XXXX' is the MD5 sum of the policies. You can add additional policy
-# using role_extra_policy.
-role: generate
-# role_extra_policy allows specifying extra policy statements when using
-# 'role: generate'.
-#
-# role_extra_policy:
-#   - effect: Allow
-#     action:
-#       - "s3:GetObject"
-#     resource:
-#       - "*"
+# role needed to run the lambda function. Lambdafy validates the role
+# trust policy and required execution permissions before publishing.
+role: my-custom-function
 
 # env defines the environmental variables available to the app. The
 # values follow the format for https://pkg.go.dev/github.com/oxplot/starenv :
@@ -63,8 +51,7 @@ role: generate
 #     If header 'Lambdafy-SQS-Group-Id' is set, it will be used as Group ID for the
 #     message. A 2xx/3xx response is considered a success, otherwise a fail. See
 #     the example below for usage.
-#     Note: The necessary IAM role permissions to send SQS messages are added
-#     when using 'role: generate'.
+#     Note: The configured IAM role must allow sending messages to this queue.
 #
 # - All other values are treated as literals.
 #

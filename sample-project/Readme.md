@@ -10,6 +10,9 @@
   specified in the first part of the example role printed by `lambdafy
   example-role` command.
 
+- Create an execution role for the function, then set `role` in `spec.yaml`
+  to that role name. `lambdafy example-role` prints a basic Terraform example.
+
 ## Run
 
 Simply run `./run.sh` to:
