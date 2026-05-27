@@ -67,7 +67,6 @@ func main() {
 	app.PersistentFlags().StringVarP(&outputTemplate, "output", "o", "", "Output go style template")
 
 	app.AddCommand(aliasCmd)
-	app.AddCommand(cleanupRolesCmd)
 	app.AddCommand(createSampleProjectCmd)
 	app.AddCommand(deleteCmd)
 	app.AddCommand(deployCmd)
