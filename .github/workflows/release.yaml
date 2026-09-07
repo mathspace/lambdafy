@@ -26,6 +26,9 @@ jobs:
           go-version: 1.26
       - name: Go Generate
         run: go generate
+      - name: Test proxy
+        working-directory: proxy
+        run: go test ./...
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
         with:
