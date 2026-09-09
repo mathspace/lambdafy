@@ -12,8 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// RoleGenerate is a special role name that indicates the role should be
-// generated.
+// RoleGenerate is a deprecated role value that is now rejected by Load.
 const RoleGenerate = "generate"
 
 // DefaultLogGroupRetentionDays is the default CloudWatch Logs retention for
@@ -21,6 +20,7 @@ const RoleGenerate = "generate"
 const DefaultLogGroupRetentionDays int32 = 90
 
 var ecrRepoPat = regexp.MustCompile(`^\d+\.dkr\.ecr\.[^.]+\.amazonaws\.com/`)
+var iamRoleNamePat = regexp.MustCompile(`^[A-Za-z0-9_+=,.@-]{1,64}$`)
 
 var validLogGroupRetentionDays = map[int32]bool{
 	1:    true,
@@ -155,13 +155,14 @@ func Load(r io.Reader, vars map[string]string) (*Spec, error) {
 	if s.Name == "" || s.Image == "" || s.Role == "" {
 		return nil, errors.New("name, image and role must be specified")
 	}
-	if len(s.RoleExtraPolicy) > 0 && s.Role != RoleGenerate {
-		return nil, errors.New("role_extra_policy can only be used with role: generate")
+	if s.Role == RoleGenerate {
+		return nil, errors.New("role: generate is no longer supported; create an IAM role and set role to its name")
 	}
-	for _, p := range s.RoleExtraPolicy {
-		if p.Effect == "" || len(p.Action) == 0 || len(p.Resource) == 0 {
-			return nil, errors.New("role_extra_policy items must have effect, action and resource")
-		}
+	if !iamRoleNamePat.MatchString(s.Role) {
+		return nil, errors.New("role must be an existing IAM role name, not an ARN or path")
+	}
+	if len(s.RoleExtraPolicy) > 0 {
+		return nil, errors.New("role_extra_policy is no longer supported; attach permissions to the configured IAM role")
 	}
 	if s.Memory != nil && (*s.Memory < 128 || *s.Memory > 10240) {
 		return nil, errors.New("memory must be between 128 and 10240 MB")

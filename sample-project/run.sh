@@ -26,5 +26,4 @@ lambdafy info -o '{{.url}}' lambdafy-sample-project
 echo
 echo '* To view live logs, run `lambdafy logs --tail lambdafy-sample-project`'
 echo '* To delete the function, run `lambdafy delete lambdafy-sample-project`'
-echo '* To cleanup generated roles, run `lambdafy cleanup-roles`'
-echo '* You will need to manually delete the other resources (e.g. ECR Repo)'
+echo '* You will need to manually delete the other resources (e.g. ECR repo and IAM role)'

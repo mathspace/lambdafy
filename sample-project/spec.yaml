@@ -1,6 +1,6 @@
 name: lambdafy-sample-project
 image: lambdafy-sample-project
-role: generate
+role: my-custom-function
 create_repo: true
 timeout: 30
 cron:
