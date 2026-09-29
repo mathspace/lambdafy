@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -60,7 +62,10 @@ func resolveAndValidateRole(ctx context.Context, iamCl iamRoleValidationClient, 
 	if len(spec.CronTriggers) > 0 {
 		servicePrincipals = append(servicePrincipals, schedulerServicePrincipal)
 	}
-	if err := validateAssumeRolePolicy(*role.Role.AssumeRolePolicyDocument, servicePrincipals); err != nil {
+	if err := validateAssumeRolePolicy(*role.Role.AssumeRolePolicyDocument, servicePrincipals, map[string]string{
+		"aws:SourceAccount": accountID,
+		"aws:SourceArn":     fmt.Sprintf("arn:aws:scheduler:%s:%s:schedule-group/lambdafy-%s", region, accountID, spec.Name),
+	}); err != nil {
 		return "", fmt.Errorf("role %q cannot be used by lambdafy: %w", spec.Role, err)
 	}
 
@@ -68,7 +73,7 @@ func resolveAndValidateRole(ctx context.Context, iamCl iamRoleValidationClient, 
 	if err != nil {
 		return "", err
 	}
-	missing, err := missingRequiredRolePermissions(ctx, iamCl, *role.Role.Arn, permissions)
+	missing, err := missingRequiredRolePermissions(ctx, iamCl, *role.Role.Arn, region, permissions)
 	if err != nil {
 		return "", fmt.Errorf("failed to simulate role %q permissions: %w", spec.Role, err)
 	}
@@ -97,6 +102,7 @@ func requiredExecutionRolePermissions(spec *fnspec.Spec, accountID, region strin
 			requiredRolePermission{Action: "ec2:CreateNetworkInterface", Resource: "*"},
 			requiredRolePermission{Action: "ec2:DeleteNetworkInterface", Resource: "*"},
 			requiredRolePermission{Action: "ec2:DescribeNetworkInterfaces", Resource: "*"},
+			requiredRolePermission{Action: "ec2:DescribeSubnets", Resource: "*"},
 			requiredRolePermission{Action: "ec2:UnassignPrivateIpAddresses", Resource: "*"},
 		)
 	}
@@ -170,10 +176,10 @@ func dedupeRequiredRolePermissions(permissions []requiredRolePermission) []requi
 	return unique
 }
 
-func missingRequiredRolePermissions(ctx context.Context, iamCl iamRoleValidationClient, roleARN string, permissions []requiredRolePermission) ([]missingRolePermission, error) {
+func missingRequiredRolePermissions(ctx context.Context, iamCl iamRoleValidationClient, roleARN, region string, permissions []requiredRolePermission) ([]missingRolePermission, error) {
 	missing := make([]missingRolePermission, 0)
 	for _, permission := range permissions {
-		decision, missingContextValues, err := simulateRolePermission(ctx, iamCl, roleARN, permission)
+		decision, missingContextValues, err := simulateRolePermission(ctx, iamCl, roleARN, region, permission)
 		if err != nil {
 			return nil, err
 		}
@@ -188,7 +194,7 @@ func missingRequiredRolePermissions(ctx context.Context, iamCl iamRoleValidation
 	return missing, nil
 }
 
-func simulateRolePermission(ctx context.Context, iamCl iamRoleValidationClient, roleARN string, permission requiredRolePermission) (iamtypes.PolicyEvaluationDecisionType, []string, error) {
+func simulateRolePermission(ctx context.Context, iamCl iamRoleValidationClient, roleARN, region string, permission requiredRolePermission) (iamtypes.PolicyEvaluationDecisionType, []string, error) {
 	in := &iam.SimulatePrincipalPolicyInput{
 		PolicySourceArn: aws.String(roleARN),
 		ActionNames:     []string{permission.Action},
@@ -202,6 +208,25 @@ func simulateRolePermission(ctx context.Context, iamCl iamRoleValidationClient, 
 				ContextKeyValues: []string{permission.LambdaSourceFunctionARN},
 			},
 		}
+	}
+	// The API endpoint region is known even for resource-less EC2 actions.
+	// Resource ownership is only known for a concrete resource ARN.
+	if resource, err := arn.Parse(permission.Resource); err == nil {
+		if resource.Region != "" {
+			region = resource.Region
+		}
+		if resource.AccountID != "" && !strings.ContainsAny(resource.AccountID, "*?") {
+			in.ContextEntries = append(in.ContextEntries, iamtypes.ContextEntry{
+				ContextKeyName: aws.String("aws:ResourceAccount"), ContextKeyType: iamtypes.ContextKeyTypeEnumString,
+				ContextKeyValues: []string{resource.AccountID},
+			})
+		}
+	}
+	if region != "" {
+		in.ContextEntries = append(in.ContextEntries, iamtypes.ContextEntry{
+			ContextKeyName: aws.String("aws:RequestedRegion"), ContextKeyType: iamtypes.ContextKeyTypeEnumString,
+			ContextKeyValues: []string{region},
+		})
 	}
 	paginator := iam.NewSimulatePrincipalPolicyPaginator(iamCl, in)
 
@@ -265,9 +290,12 @@ func (s *assumeRoleStatements) UnmarshalJSON(b []byte) error {
 }
 
 type assumeRoleStatement struct {
-	Effect    string              `json:"Effect"`
-	Action    stringList          `json:"Action"`
-	Principal assumeRolePrincipal `json:"Principal"`
+	Effect       string                           `json:"Effect"`
+	Condition    map[string]map[string]stringList `json:"Condition"`
+	NotAction    json.RawMessage                  `json:"NotAction"`
+	NotPrincipal json.RawMessage                  `json:"NotPrincipal"`
+	Action       stringList                       `json:"Action"`
+	Principal    assumeRolePrincipal              `json:"Principal"`
 }
 
 type assumeRolePrincipal struct {
@@ -284,11 +312,17 @@ func (p *assumeRolePrincipal) UnmarshalJSON(b []byte) error {
 
 	var principal struct {
 		Service stringList `json:"Service"`
+		AWS     stringList `json:"AWS"`
 	}
 	if err := json.Unmarshal(b, &principal); err != nil {
 		return err
 	}
 	p.Services = principal.Service
+	for _, value := range principal.AWS {
+		if value == "*" {
+			p.All = true
+		}
+	}
 	return nil
 }
 
@@ -321,23 +355,36 @@ func (s *stringList) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func iamPatternMatches(pattern, value string) bool {
+	pattern = regexp.QuoteMeta(pattern)
+	pattern = strings.ReplaceAll(strings.ReplaceAll(pattern, `\*`, ".*"), `\?`, ".")
+	matched, _ := regexp.MatchString("^"+pattern+"$", value)
+	return matched
+}
+
+func arnConditionMatches(pattern, value string) bool {
+	patterns, values := strings.SplitN(pattern, ":", 6), strings.SplitN(value, ":", 6)
+	if len(patterns) != 6 || len(values) != 6 {
+		return false
+	}
+	for i := range patterns {
+		if !iamPatternMatches(patterns[i], values[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 func (s stringList) matchesAction(action string) bool {
-	action = strings.ToLower(action)
 	for _, candidate := range s {
-		candidate = strings.ToLower(candidate)
-		switch {
-		case candidate == "*":
-			return true
-		case strings.HasSuffix(candidate, "*") && strings.HasPrefix(action, strings.TrimSuffix(candidate, "*")):
-			return true
-		case candidate == action:
+		if iamPatternMatches(strings.ToLower(candidate), strings.ToLower(action)) {
 			return true
 		}
 	}
 	return false
 }
 
-func validateAssumeRolePolicy(encodedPolicy string, servicePrincipals []string) error {
+func validateAssumeRolePolicy(encodedPolicy string, servicePrincipals []string, schedulerContext map[string]string) error {
 	policyJSON, err := url.QueryUnescape(encodedPolicy)
 	if err != nil {
 		return fmt.Errorf("failed to decode assume role policy: %w", err)
@@ -349,25 +396,77 @@ func validateAssumeRolePolicy(encodedPolicy string, servicePrincipals []string) 
 	}
 
 	for _, service := range servicePrincipals {
-		if !assumeRolePolicyAllowsService(policy, service) {
+		contextValues := map[string]string{}
+		if service == schedulerServicePrincipal {
+			contextValues = schedulerContext
+		}
+		allowed := false
+		for _, statement := range policy.Statement {
+			if len(statement.NotAction) > 0 || len(statement.NotPrincipal) > 0 {
+				return fmt.Errorf("cannot verify assume role policy with NotAction or NotPrincipal")
+			}
+			if !statement.Action.matchesAction("sts:AssumeRole") || !statement.Principal.allowsService(service) {
+				continue
+			}
+			matches, err := trustConditionsMatch(statement.Condition, contextValues)
+			if err != nil {
+				return fmt.Errorf("cannot verify trust for %s: %w", service, err)
+			}
+			if !matches {
+				continue
+			}
+			switch statement.Effect {
+			case "Deny":
+				return fmt.Errorf("assume role policy explicitly denies %s", service)
+			case "Allow":
+				allowed = true
+			default:
+				return fmt.Errorf("unsupported trust policy effect %q", statement.Effect)
+			}
+		}
+		if !allowed {
 			return fmt.Errorf("assume role policy must allow %s to call sts:AssumeRole", service)
 		}
 	}
 	return nil
 }
 
-func assumeRolePolicyAllowsService(policy assumeRolePolicy, service string) bool {
-	for _, statement := range policy.Statement {
-		if !strings.EqualFold(statement.Effect, "Allow") {
-			continue
+// Only evaluate conditions whose request context is known before deployment.
+// Unknown keys/operators fail closed instead of treating a conditional grant as unconditional.
+func trustConditionsMatch(conditions map[string]map[string]stringList, values map[string]string) (bool, error) {
+	matches := true
+	for operator, keys := range conditions {
+		switch operator {
+		case "StringEquals", "ArnEquals", "StringLike", "ArnLike":
+		default:
+			return false, fmt.Errorf("unsupported trust condition operator %q", operator)
 		}
-		if !statement.Action.matchesAction("sts:AssumeRole") {
-			continue
+		for key, candidates := range keys {
+			value, known := "", false
+			for contextKey, contextValue := range values {
+				if strings.EqualFold(key, contextKey) {
+					value, known = contextValue, true
+				}
+			}
+			if !known {
+				return false, fmt.Errorf("unknown request context for trust condition %q", key)
+			}
+			matched := false
+			for _, candidate := range candidates {
+				if strings.Contains(candidate, "${") {
+					return false, fmt.Errorf("cannot verify policy variable in trust condition %q", key)
+				}
+				switch operator {
+				case "ArnLike", "ArnEquals":
+					matched = matched || arnConditionMatches(candidate, value)
+				case "StringLike":
+					matched = matched || iamPatternMatches(candidate, value)
+				default:
+					matched = matched || candidate == value
+				}
+			}
+			matches = matches && matched
 		}
-		if !statement.Principal.allowsService(service) {
-			continue
-		}
-		return true
 	}
-	return false
+	return matches, nil
 }

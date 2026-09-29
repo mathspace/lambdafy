@@ -237,6 +237,7 @@ type fakeRoleValidationClient struct {
 	trustPolicy string
 	allowed     map[requiredRolePermission]bool
 	simulated   []requiredRolePermission
+	inputs      []*iam.SimulatePrincipalPolicyInput
 }
 
 func newFakeRoleValidationClient(trustPolicy string, allowed []requiredRolePermission) *fakeRoleValidationClient {
@@ -266,6 +267,7 @@ func (f *fakeRoleValidationClient) SimulatePrincipalPolicy(_ context.Context, in
 		LambdaSourceFunctionARN: lambdaSourceFunctionARNFromContext(input.ContextEntries),
 	}
 	f.simulated = append(f.simulated, permission)
+	f.inputs = append(f.inputs, input)
 
 	decision := iamtypes.PolicyEvaluationDecisionTypeImplicitDeny
 	if f.allowed[permission] {
@@ -337,4 +339,72 @@ func hasPermission(permissions []requiredRolePermission, needle requiredRolePerm
 		}
 	}
 	return false
+}
+
+func TestTrustPolicyConditionsAndDeny(t *testing.T) {
+	contextValues := map[string]string{"aws:SourceAccount": testAccountID, "aws:SourceArn": "arn:aws:scheduler:us-east-1:123456789012:schedule-group/lambdafy-my-function"}
+	for _, tc := range []struct {
+		name, condition, extra string
+		wantError              bool
+	}{
+		{name: "unconditional"},
+		{name: "matching scheduler scope", condition: `,"Condition":{"StringEquals":{"aws:SourceAccount":"123456789012"},"ArnLike":{"aws:SourceArn":"arn:aws:scheduler:us-east-1:123456789012:schedule-group/lambdafy-*"}}`},
+		{name: "wrong account", condition: `,"Condition":{"StringEquals":{"aws:SourceAccount":"999999999999"}}`, wantError: true},
+		{name: "wrong group", condition: `,"Condition":{"ArnEquals":{"aws:SourceArn":"arn:aws:scheduler:us-east-1:123456789012:schedule-group/other"}}`, wantError: true},
+		{name: "unknown context", condition: `,"Condition":{"StringEquals":{"aws:PrincipalOrgID":"o-example"}}`, wantError: true},
+		{name: "unknown operator", condition: `,"Condition":{"StringNotEquals":{"aws:SourceAccount":"999999999999"}}`, wantError: true},
+		{name: "deny action wildcard", extra: `,{"Effect":"Deny","Action":"sts:*Role","Principal":"*"}`, wantError: true},
+		{name: "deny action question wildcard", extra: `,{"Effect":"Deny","Action":"sts:Ass?meRole","Principal":"*"}`, wantError: true},
+		{name: "deny AWS wildcard principal", extra: `,{"Effect":"Deny","Action":"sts:AssumeRole","Principal":{"AWS":"*"}}`, wantError: true},
+		{name: "deny ARN equals wildcard", extra: `,{"Effect":"Deny","Action":"sts:AssumeRole","Principal":"*","Condition":{"ArnEquals":{"aws:SourceArn":"arn:aws:scheduler:*:123456789012:schedule-group/*"}}}`, wantError: true},
+		{name: "deny policy variable", extra: `,{"Effect":"Deny","Action":"sts:AssumeRole","Principal":"*","Condition":{"ArnLike":{"aws:SourceArn":"arn:aws:scheduler:*:${aws:SourceAccount}:schedule-group/*"}}}`, wantError: true},
+		{name: "deny after allow", extra: `,{"Effect":"Deny","Action":"sts:*","Principal":"*"}`, wantError: true},
+		{name: "conditional deny", extra: `,{"Effect":"Deny","Action":"sts:AssumeRole","Principal":"*","Condition":{"StringEquals":{"aws:SourceAccount":"123456789012"}}}`, wantError: true},
+		{name: "nonmatching deny", extra: `,{"Effect":"Deny","Action":"sts:AssumeRole","Principal":"*","Condition":{"StringEquals":{"aws:SourceAccount":"999999999999"}}}`},
+		{name: "not principal", extra: `,{"Effect":"Deny","Action":"sts:AssumeRole","NotPrincipal":{"Service":"lambda.amazonaws.com"}}`, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			policy := fmt.Sprintf(`{"Statement":[{"Effect":"Allow","Action":"sts:AssumeRole","Principal":{"Service":"scheduler.amazonaws.com"}%s}%s]}`, tc.condition, tc.extra)
+			err := validateAssumeRolePolicy(policy, []string{schedulerServicePrincipal}, contextValues)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("error=%v, wantError=%v", err, tc.wantError)
+			}
+		})
+	}
+	// Scheduler source context cannot be assumed to exist for Lambda role assumption.
+	policy := `{"Statement":{"Effect":"Allow","Action":"sts:AssumeRole","Principal":{"Service":"lambda.amazonaws.com"},"Condition":{"StringEquals":{"aws:SourceAccount":"123456789012"}}}}`
+	if err := validateAssumeRolePolicy(policy, []string{lambdaServicePrincipal}, contextValues); err == nil {
+		t.Fatal("accepted unknown Lambda trust context")
+	}
+}
+
+func TestRoleSimulationProvidesKnownRegionalAndResourceContext(t *testing.T) {
+	spec := &fnspec.Spec{Name: "my-function", Role: "my-function-role", VPCSubnetIds: []string{"subnet-123"}, Env: map[string]string{"QUEUE": "*lambdafy_sqs_send:arn:aws:sqs:ap-southeast-2:999999999999:queue"}}
+	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, roleValidationScope{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasPermission(permissions, requiredRolePermission{Action: "ec2:DescribeSubnets", Resource: "*"}) {
+		t.Fatal("VPC role must allow DescribeSubnets")
+	}
+	fake := newFakeRoleValidationClient(trustPolicy(lambdaServicePrincipal), permissions)
+	if _, err := resolveAndValidateRole(context.Background(), fake, spec, testAccountID, testRegion, roleValidationScope{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, input := range fake.inputs {
+		values := map[string]string{}
+		for _, entry := range input.ContextEntries {
+			values[*entry.ContextKeyName] = entry.ContextKeyValues[0]
+		}
+		wantRegion, wantAccount := testRegion, testAccountID
+		if strings.HasPrefix(input.ActionNames[0], "sqs:") {
+			wantRegion, wantAccount = "ap-southeast-2", "999999999999"
+		}
+		if input.ResourceArns[0] == "*" {
+			wantAccount = ""
+		}
+		if values["aws:RequestedRegion"] != wantRegion || values["aws:ResourceAccount"] != wantAccount {
+			t.Fatalf("%s context=%v, want region=%s account=%s", input.ActionNames[0], values, wantRegion, wantAccount)
+		}
+	}
 }
