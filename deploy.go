@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
@@ -241,7 +242,8 @@ func listSQSEventSourceMappings(ctx context.Context, lambdaCl *lambda.Client, fu
 			return nil, err
 		}
 		for _, em := range es.EventSourceMappings {
-			if em.EventSourceArn == nil || !strings.HasPrefix(*em.EventSourceArn, "arn:aws:sqs:") {
+			eventARN, err := arn.Parse(aws.ToString(em.EventSourceArn))
+			if err != nil || eventARN.Service != "sqs" {
 				continue
 			}
 			lst = append(lst, em)
@@ -300,7 +302,11 @@ func deploy(fnName string, version int, primeCount int) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get aws account number: %s", err)
 	}
-	sourceFunctionARN := lambdaFunctionARN(*cid.Account, acfg.Region, fnName)
+	callerARN, err := arn.Parse(aws.ToString(cid.Arn))
+	if err != nil {
+		return "", fmt.Errorf("invalid AWS caller ARN: %w", err)
+	}
+	sourceFunctionARN := lambdaFunctionARN(callerARN.Partition, *cid.Account, acfg.Region, fnName)
 	if fnCfg.Configuration.FunctionArn != nil && *fnCfg.Configuration.FunctionArn != "" {
 		sourceFunctionARN = unqualifiedLambdaFunctionARN(*fnCfg.Configuration.FunctionArn)
 	}

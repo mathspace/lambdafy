@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
@@ -35,6 +36,7 @@ var defaultRolePolicyStatements = []*fnspec.RolePolicy{
 			"ec2:CreateNetworkInterface",
 			"ec2:DeleteNetworkInterface",
 			"ec2:DescribeNetworkInterfaces",
+			"ec2:DescribeSubnets",
 			"ec2:UnassignPrivateIpAddresses",
 			"logs:CreateLogStream",
 			"logs:PutLogEvents",
@@ -200,6 +202,10 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 	if err != nil {
 		return res, fmt.Errorf("failed to get aws account number: %s", err)
 	}
+	callerARN, err := arn.Parse(aws.ToString(cid.Arn))
+	if err != nil {
+		return res, fmt.Errorf("invalid AWS caller ARN: %w", err)
+	}
 	if !spec.IsAccountRegionAllowed(*cid.Account, acfg.Region) {
 		return res, fmt.Errorf("aws account and/or region is not allowed by spec")
 	}
@@ -236,7 +242,7 @@ func publish(specReader io.Reader, vars map[string]string) (res publishResult, e
 
 	iamCl := iam.NewFromConfig(acfg)
 	roleArn, err := resolveAndValidateRole(ctx, iamCl, spec, *cid.Account, acfg.Region, roleValidationScope{
-		LambdaSourceFunctionARN: lambdaFunctionARN(*cid.Account, acfg.Region, spec.Name),
+		LambdaSourceFunctionARN: lambdaFunctionARN(callerARN.Partition, *cid.Account, acfg.Region, spec.Name),
 	})
 	if err != nil {
 		return res, err

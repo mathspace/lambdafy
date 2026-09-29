@@ -58,18 +58,22 @@ func resolveAndValidateRole(ctx context.Context, iamCl iamRoleValidationClient, 
 		return "", fmt.Errorf("role %q has no assume role policy", spec.Role)
 	}
 
+	roleARN, err := arn.Parse(*role.Role.Arn)
+	if err != nil {
+		return "", fmt.Errorf("invalid role ARN: %w", err)
+	}
 	servicePrincipals := []string{lambdaServicePrincipal}
 	if len(spec.CronTriggers) > 0 {
 		servicePrincipals = append(servicePrincipals, schedulerServicePrincipal)
 	}
 	if err := validateAssumeRolePolicy(*role.Role.AssumeRolePolicyDocument, servicePrincipals, map[string]string{
 		"aws:SourceAccount": accountID,
-		"aws:SourceArn":     fmt.Sprintf("arn:aws:scheduler:%s:%s:schedule-group/lambdafy-%s", region, accountID, spec.Name),
+		"aws:SourceArn":     fmt.Sprintf("arn:%s:scheduler:%s:%s:schedule-group/lambdafy-%s", roleARN.Partition, region, accountID, spec.Name),
 	}); err != nil {
 		return "", fmt.Errorf("role %q cannot be used by lambdafy: %w", spec.Role, err)
 	}
 
-	permissions, err := requiredExecutionRolePermissions(spec, accountID, region, scope)
+	permissions, err := requiredExecutionRolePermissions(spec, accountID, region, roleARN.Partition, scope)
 	if err != nil {
 		return "", err
 	}
@@ -84,8 +88,8 @@ func resolveAndValidateRole(ctx context.Context, iamCl iamRoleValidationClient, 
 	return *role.Role.Arn, nil
 }
 
-func requiredExecutionRolePermissions(spec *fnspec.Spec, accountID, region string, scope roleValidationScope) ([]requiredRolePermission, error) {
-	logGroupARN := fmt.Sprintf("arn:aws:logs:%s:%s:log-group:%s", region, accountID, lambdaLogGroupName(spec.Name))
+func requiredExecutionRolePermissions(spec *fnspec.Spec, accountID, region, partition string, scope roleValidationScope) ([]requiredRolePermission, error) {
+	logGroupARN := fmt.Sprintf("arn:%s:logs:%s:%s:log-group:%s", partition, region, accountID, lambdaLogGroupName(spec.Name))
 	logStreamARN := logGroupARN + ":log-stream:*"
 	// Lambdafy manages the log group before deploy-time invocation, so the
 	// execution role only needs stream/event permissions for Lambda logging.
@@ -131,8 +135,8 @@ func requiredExecutionRolePermissions(spec *fnspec.Spec, accountID, region strin
 	return dedupeRequiredRolePermissions(permissions), nil
 }
 
-func lambdaFunctionARN(accountID, region, fnName string) string {
-	return fmt.Sprintf("arn:aws:lambda:%s:%s:function:%s", region, accountID, fnName)
+func lambdaFunctionARN(partition, accountID, region, fnName string) string {
+	return fmt.Sprintf("arn:%s:lambda:%s:%s:function:%s", partition, region, accountID, fnName)
 }
 
 func unqualifiedLambdaFunctionARN(functionARN string) string {

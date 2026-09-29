@@ -25,7 +25,7 @@ func TestResolveAndValidateRoleAllowsConfiguredRole(t *testing.T) {
 		Env:  map[string]string{},
 	}
 	scope := roleValidationScope{}
-	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, scope)
+	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, "aws", scope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestResolveAndValidateRoleFailsWhenPermissionIsMissing(t *testing.T) {
 		Env:  map[string]string{},
 	}
 	scope := roleValidationScope{}
-	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, scope)
+	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, "aws", scope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestRequiredExecutionRolePermissionsOmitsManagedLogGroupCreation(t *testing
 		Env:  map[string]string{},
 	}
 
-	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, roleValidationScope{})
+	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, "aws", roleValidationScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestResolveAndValidateRoleRequiresSchedulerTrustForCron(t *testing.T) {
 		CronTriggers: map[string]string{"hourly": "0 * * * ? *"},
 	}
 	scope := roleValidationScope{}
-	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, scope)
+	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, "aws", scope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestResolveAndValidateRoleValidatesCronInvokeAgainstSchedulerTargetARN(t *t
 	}
 	targetARN := "arn:aws:lambda:us-east-1:123456789012:function:my-function:42"
 	scope := roleValidationScope{SchedulerTargetARN: targetARN}
-	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, scope)
+	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, "aws", scope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestResolveAndValidateRoleProvidesLambdaSourceFunctionContext(t *testing.T)
 		},
 	}
 	scope := roleValidationScope{LambdaSourceFunctionARN: sourceARN}
-	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, scope)
+	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, "aws", scope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestRequiredExecutionRolePermissionsOmitsLambdaSourceContextForEventSourceP
 		},
 	}
 
-	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, roleValidationScope{
+	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, "aws", roleValidationScope{
 		LambdaSourceFunctionARN: sourceARN,
 	})
 	if err != nil {
@@ -213,7 +213,7 @@ func TestRequiredExecutionRolePermissionsIncludesSQSBatchSend(t *testing.T) {
 		},
 	}
 
-	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, roleValidationScope{})
+	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, "aws", roleValidationScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,6 +235,7 @@ func TestUnqualifiedLambdaFunctionARN(t *testing.T) {
 
 type fakeRoleValidationClient struct {
 	trustPolicy string
+	roleARN     string
 	allowed     map[requiredRolePermission]bool
 	simulated   []requiredRolePermission
 	inputs      []*iam.SimulatePrincipalPolicyInput
@@ -247,6 +248,7 @@ func newFakeRoleValidationClient(trustPolicy string, allowed []requiredRolePermi
 	}
 	return &fakeRoleValidationClient{
 		trustPolicy: trustPolicy,
+		roleARN:     testRoleARN,
 		allowed:     allowedMap,
 	}
 }
@@ -254,7 +256,7 @@ func newFakeRoleValidationClient(trustPolicy string, allowed []requiredRolePermi
 func (f *fakeRoleValidationClient) GetRole(context.Context, *iam.GetRoleInput, ...func(*iam.Options)) (*iam.GetRoleOutput, error) {
 	return &iam.GetRoleOutput{
 		Role: &iamtypes.Role{
-			Arn:                      aws.String(testRoleARN),
+			Arn:                      aws.String(f.roleARN),
 			AssumeRolePolicyDocument: aws.String(f.trustPolicy),
 		},
 	}, nil
@@ -380,7 +382,7 @@ func TestTrustPolicyConditionsAndDeny(t *testing.T) {
 
 func TestRoleSimulationProvidesKnownRegionalAndResourceContext(t *testing.T) {
 	spec := &fnspec.Spec{Name: "my-function", Role: "my-function-role", VPCSubnetIds: []string{"subnet-123"}, Env: map[string]string{"QUEUE": "*lambdafy_sqs_send:arn:aws:sqs:ap-southeast-2:999999999999:queue"}}
-	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, roleValidationScope{})
+	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, testRegion, "aws", roleValidationScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -406,5 +408,36 @@ func TestRoleSimulationProvidesKnownRegionalAndResourceContext(t *testing.T) {
 		if values["aws:RequestedRegion"] != wantRegion || values["aws:ResourceAccount"] != wantAccount {
 			t.Fatalf("%s context=%v, want region=%s account=%s", input.ActionNames[0], values, wantRegion, wantAccount)
 		}
+	}
+}
+
+func TestPreflightUsesRolePartition(t *testing.T) {
+	spec := &fnspec.Spec{Name: "my-function", Role: "my-function-role", Env: map[string]string{}, CronTriggers: map[string]string{"hourly": "0 * * * ? *"}}
+	sourceARN := lambdaFunctionARN("aws-us-gov", testAccountID, "us-gov-west-1", spec.Name)
+	scope := roleValidationScope{LambdaSourceFunctionARN: sourceARN, SchedulerTargetARN: sourceARN + ":42"}
+	permissions, err := requiredExecutionRolePermissions(spec, testAccountID, "us-gov-west-1", "aws-us-gov", scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trust := `{"Statement":[{"Effect":"Allow","Action":"sts:AssumeRole","Principal":{"Service":"lambda.amazonaws.com"}},{"Effect":"Allow","Action":"sts:AssumeRole","Principal":{"Service":"scheduler.amazonaws.com"},"Condition":{"ArnEquals":{"aws:SourceArn":"arn:aws-us-gov:scheduler:us-gov-west-1:123456789012:schedule-group/lambdafy-my-function"}}}]}`
+	fake := newFakeRoleValidationClient(trust, permissions)
+	fake.roleARN = "arn:aws-us-gov:iam::123456789012:role/my-function-role"
+	if _, err := resolveAndValidateRole(context.Background(), fake, spec, testAccountID, "us-gov-west-1", scope); err != nil {
+		t.Fatal(err)
+	}
+	for _, permission := range fake.simulated {
+		if !strings.HasPrefix(permission.Resource, "arn:aws-us-gov:") {
+			t.Fatalf("wrong partition: %v", permission)
+		}
+	}
+}
+
+func TestExampleRoleIncludesVPCSubnetPermission(t *testing.T) {
+	policy, err := serializeRolePolicy(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(policy, `"ec2:DescribeSubnets"`) {
+		t.Fatal("example role omits required DescribeSubnets")
 	}
 }

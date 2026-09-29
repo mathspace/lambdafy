@@ -34,7 +34,12 @@ image: ubuntu
 # role is the name of an existing IAM role.
 # Run `lambdafy example-role` to see terraform definition for a basic
 # role needed to run the lambda function. Lambdafy validates the role
-# trust policy and required execution permissions before publishing.
+# trust policy and known identity-policy permissions before publishing.
+# This is not a complete authorization proof: queue resource policies and KMS
+# key policies/grants are not evaluated. For SSE-KMS SQS triggers, separately
+# verify kms:Decrypt for every key used by queued messages (including old keys
+# after rotation and source keys for dead-letter queues). SSE-SQS needs no KMS
+# grant. Confirm event-source health after deployment.
 role: my-custom-function
 
 # env defines the environmental variables available to the app. The
