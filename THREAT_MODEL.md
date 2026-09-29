@@ -73,4 +73,3 @@ These are prioritized hypotheses for future validation, not vulnerability findin
 This model is an offline architecture review, not completed audit coverage. It does not validate live credentials, network exposure, external modules, service permissions or runtime artifacts.
 
 Repository: https://github.com/mathspace/lambdafy
-Version: `32068350f9928f9ad2ed8df19380debf19e68bd8`
