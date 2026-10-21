@@ -74,3 +74,5 @@ This model is an offline architecture review, not completed audit coverage. It d
 
 Repository: https://github.com/mathspace/lambdafy
 Version: `32068350f9928f9ad2ed8df19380debf19e68bd8`
+
+Go builds require Go 1.27.3 or newer, which rejects the compromised eMudhra intermediates. Rebuild and restart deployed binaries; source version changes do not update running services.

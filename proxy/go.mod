@@ -1,6 +1,6 @@
 module github.com/mathspace/lambdafy/proxy
 
-go 1.26.0
+go 1.27.3
 
 require (
 	github.com/aws/aws-lambda-go v1.39.1
