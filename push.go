@@ -12,7 +12,7 @@ import (
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
-	dockertypes "github.com/docker/docker/api/types"
+	dockerimagetypes "github.com/docker/docker/api/types/image"
 	dockerregistrytypes "github.com/docker/docker/api/types/registry"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/spf13/cobra"
@@ -148,7 +148,7 @@ func push(imgName string, repoName string, create bool) (string, error) {
 
 	log.Print("pushing image to ECR")
 
-	rc, err := dc.ImagePush(ctx, repoImage, dockertypes.ImagePushOptions{
+	rc, err := dc.ImagePush(ctx, repoImage, dockerimagetypes.PushOptions{
 		RegistryAuth: authCfgEncoded,
 	})
 	if err != nil {

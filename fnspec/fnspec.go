@@ -100,7 +100,7 @@ type Spec struct {
 	SQSTriggers           []*SQSTrigger     `yaml:"sqs_triggers,omitempty"`
 	CronTriggers          map[string]string `yaml:"cron,omitempty"`
 	AllowedAccountRegions []string          `yaml:"allowed_account_regions,omitempty"`
-	allowedGlobs          []glob.Glob       `yaml:"-"`
+	allowedGlobs          []*glob.Pattern  `yaml:"-"`
 }
 
 // IsAccountRegionAllowed returns true if the given account and region are
