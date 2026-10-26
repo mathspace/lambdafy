@@ -42,6 +42,7 @@ Actors and initial capabilities: Unauthenticated users can invoke deployed HTTP 
 
 Assumptions and unresolved controls:
 
+- Generated sample projects use `python:3-slim` and the Python standard library. The sample excludes the full Python image's unused OpenEXR codecs, avoiding CVE-2026-42216 in this image; operator-supplied application images remain a separate dependency boundary (sample-project/Dockerfile, sample-project/server.py, docs.go:24).
 - User-provided context: most services run on AWS and almost all sit behind Cloudflare; that does not establish an origin restriction. Student minors’ PII is extremely sensitive wherever it enters these flows.
 - Cloudflare is general supplied context; URL configuration requests public access and has no local Cloudflare-only origin restriction, but effective AWS resource-policy grants determine actual reachability. App-level auth and per-service data contracts are external.
 - Runtime has no independent child sandbox: all LAMBDAFY_ metadata is removed, then starenv dereferences environment, child inherits remaining environment and AWS authority. Outside Lambda syscall.Exec does not start the HTTP/SQS broker although dereferencing still occurs (proxy/main.go:103, proxy/main.go:126).

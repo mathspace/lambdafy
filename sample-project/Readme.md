@@ -14,7 +14,7 @@
 
 Simply run `./run.sh` to:
 
-- Build a simple busybox based docker image which responds with a static
+- Build a slim Python docker image which responds with a static
   text for all incoming HTTP requests.
 
 - Embed (aka lambdafy/`make`) the lambdafy proxy into the docker image.
