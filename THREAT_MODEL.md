@@ -42,7 +42,7 @@ Actors and initial capabilities: Unauthenticated users can invoke deployed HTTP 
 
 Assumptions and unresolved controls:
 
-- Generated sample projects use `python:3-slim` and the Python standard library. The sample excludes the full Python image's unused OpenEXR codecs, avoiding CVE-2026-42216 in this image; operator-supplied application images remain a separate dependency boundary (sample-project/Dockerfile, sample-project/server.py, docs.go:24).
+- Generated sample projects assemble a scratch runtime from `python:3-slim`, copying the interpreter, standard library, linked libraries and CA/timezone data. The final image has no shell or package manager. The sample excludes the full Python image's unused OpenEXR codecs, avoiding CVE-2026-42216 in this image; operator-supplied application images remain a separate dependency boundary (sample-project/Dockerfile, sample-project/server.py, docs.go:24).
 - User-provided context: most services run on AWS and almost all sit behind Cloudflare; that does not establish an origin restriction. Student minors’ PII is extremely sensitive wherever it enters these flows.
 - Cloudflare is general supplied context; URL configuration requests public access and has no local Cloudflare-only origin restriction, but effective AWS resource-policy grants determine actual reachability. App-level auth and per-service data contracts are external.
 - Runtime has no independent child sandbox: all LAMBDAFY_ metadata is removed, then starenv dereferences environment, child inherits remaining environment and AWS authority. Outside Lambda syscall.Exec does not start the HTTP/SQS broker although dereferencing still occurs (proxy/main.go:103, proxy/main.go:126).
@@ -77,3 +77,9 @@ Repository: https://github.com/mathspace/lambdafy
 Version: `32068350f9928f9ad2ed8df19380debf19e68bd8`
 
 Go builds require Go 1.27.3 or newer, which rejects the compromised eMudhra intermediates. Rebuild and restart deployed binaries; source version changes do not update running services.
+
+Proxy injection uses BuildKit `COPY --link` to replace `/lambdafy-proxy` without
+executing commands in the application image. Scratch images therefore need no
+shell or `rm`; an inherited proxy symlink is replaced rather than followed.
+Entrypoint wrapping, command arguments and proxy-checksum reuse are preserved.
+Deployments of new scratch application images require this Lambdafy version.
